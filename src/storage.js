@@ -13,8 +13,8 @@ export const DEFAULT_META = {
   lastDaily: null,        // ISO day string of last completed daily
   level: 1,               // highest campaign level unlocked
   stars: {},              // puzzleId -> best star count
-  owned: ["twilight", "sunrise"],   // owned skin ids
-  skin: "twilight",       // equipped skin id
+  owned: ["abacus", "twilight", "sunrise"],   // owned skin ids
+  skin: "abacus",         // equipped skin id (brand default — matches the card art)
   ownedPals: ["pip", "hoot"],       // owned Pal (companion) ids
   pal: "pip",             // equipped Pal id
   freezes: 1,             // streak freezes held

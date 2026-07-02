@@ -101,7 +101,8 @@ Exactly **one** key: **`tally:v1`** — a single JSON blob (coins, gems, streak,
 ## 7. File manifest
 
 **Deployable (shipped in `dist/` after `npm run build`):**
-- `index.html` — shell + Sky Wolf embed snippet
+- `index.html` — shell + Sky Wolf embed snippet + og/favicon
+- `public/thumbnail.png` — copied to `dist/thumbnail.png` (portal card / og:image)
 - `src/*.js`, `src/*.jsx` — bundled into `dist/assets/index-*.js`
   - `engine.js` (pure puzzle logic), `config.js` (skins/pals/worlds/economy), `storage.js`, `wallet.js`, `audio.js`, `Game.jsx` (all UI + CSS), `App.jsx`, `main.jsx`
 - `vite.config.js` — `base: "./"` for relative paths
@@ -119,9 +120,11 @@ Exactly **one** key: **`tally:v1`** — a single JSON blob (coins, gems, streak,
 
 ---
 
-## 8. Thumbnail source
+## 8. Thumbnail / brand art
 
-No binary asset is committed, but the portal card art can be rendered from the game's own look: the amber **beacon** (target) over the moonstone number ring on the indigo "Twilight" background, with the fox Pal 🦊 peeking from the corner. A quick capture: open the live URL, or use the beacon + `🦊🦉🐲🦄` Pal faces on a `#0d1326`→`#182246` radial gradient. (Say the word and I'll add a committed `thumbnail.png`/SVG.)
+**Committed:** `public/thumbnail.png` (painterly abacus — navy + burnt-orange beads on warm cream, 1024×1024). It ships to the deploy root as **`./thumbnail.png`** and is wired as the `og:image` + `apple-touch-icon` in `index.html`. Use it directly for the portal card.
+
+The whole game's art direction is built from this image: the default **Abacus** skin renders the number tiles as glossy navy beads on a warm-cream board threaded by a faint "abacus rod" ring, with a burnt-orange target bead — so the live game visually matches its card. The favicon is a tiny inline SVG of the same bead motif (keeps the 1.9 MB art out of page load).
 
 ---
 

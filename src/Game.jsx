@@ -409,8 +409,9 @@ export default function App() {
     return (
       <div className="mv-root mv-splash" style={rootStyle}>
         <StyleTag />
+        <div className="mv-splash-beads"><span /><span /><span /><span /></div>
         <div className="mv-splash-logo"><span>Ta</span><b>lly</b></div>
-        <div className="mv-splash-sub">arranging the numbers…</div>
+        <div className="mv-splash-sub">sliding the beads into place…</div>
       </div>
     );
   }
@@ -424,7 +425,7 @@ export default function App() {
         <div className="mv-brand"><span>Ta</span><b>lly</b></div>
         <div className="mv-wallet">
           {boostActive && <span className="mv-chip mv-boost" title="Double coins active"><Zap size={13} /> 2×</span>}
-          <span className="mv-chip"><Flame size={14} className="mv-flame" /> {meta.streak}</span>
+          {meta.streak > 0 && <span className="mv-chip" title="Daily streak"><Flame size={14} className="mv-flame" /> {meta.streak}</span>}
           <span className="mv-chip"><Coins size={14} /> {meta.coins}</span>
           <span className="mv-chip"><Gem size={14} /> {meta.gems}</span>
           <button className="mv-icobtn" onClick={() => setOverlay("howto")} aria-label="How to play"><HelpCircle size={17} /></button>
@@ -1014,36 +1015,59 @@ function StyleTag() {
     .mv-root {
       --bg:#0d1326; --bg2:#182246; font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       position: relative; width: 100%; min-height: 100%; max-width: 520px; margin: 0 auto;
-      background: radial-gradient(120% 90% at 50% -10%, var(--bg2), var(--bg));
+      background:
+        radial-gradient(90% 55% at 50% 108%, color-mix(in srgb, var(--acc) 14%, transparent), transparent 70%),
+        radial-gradient(120% 90% at 50% -10%, var(--bg2), var(--bg));
       color: var(--text); display: flex; flex-direction: column; overflow: hidden;
       height: 100vh; height: 100dvh; user-select: none;
     }
+    /* faint paper grain, keyed off the theme so it reads on light & dark skins */
+    .mv-root::before { content:""; position: absolute; inset: 0; pointer-events: none; z-index: -1; opacity: .5;
+      background-image: radial-gradient(color-mix(in srgb, var(--line) 34%, transparent) 1px, transparent 1.4px);
+      background-size: 22px 22px; -webkit-mask-image: radial-gradient(120% 100% at 50% 0%, #000 40%, transparent 92%);
+      mask-image: radial-gradient(120% 100% at 50% 0%, #000 40%, transparent 92%); }
     .mv-root, .mv-root * { font-variant-numeric: tabular-nums; }
 
     /* splash */
-    .mv-splash { align-items: center; justify-content: center; gap: 10px; }
-    .mv-splash-logo { font-size: 34px; letter-spacing: -1px; }
+    .mv-splash { align-items: center; justify-content: center; gap: 12px; }
+    .mv-splash-beads { display: flex; gap: 9px; }
+    .mv-splash-beads span { width: 22px; height: 22px; border-radius: 50%;
+      background: radial-gradient(circle at 34% 28%, var(--tile), var(--tile2)); box-shadow: inset 0 2px 3px rgba(255,255,255,.5), 0 3px 7px rgba(0,0,0,.28);
+      animation: mv-beadbob 1.3s ease-in-out infinite; }
+    .mv-splash-beads span:nth-child(2){ background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--target) 80%, #fff), var(--target)); animation-delay: .15s; }
+    .mv-splash-beads span:nth-child(3){ animation-delay: .3s; }
+    .mv-splash-beads span:nth-child(4){ background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--target) 80%, #fff), var(--target)); animation-delay: .45s; }
+    @keyframes mv-beadbob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+    .mv-splash-logo { font-size: 38px; font-weight: 800; letter-spacing: -1.5px; }
     .mv-splash-logo b { color: var(--target); }
     .mv-splash-sub { color: var(--muted); font-size: 13px; letter-spacing: .5px; }
 
     /* top bar */
-    .mv-top { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px 4px; flex-shrink: 0; }
-    .mv-brand { font-size: 19px; font-weight: 800; letter-spacing: -.5px; }
+    .mv-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 4px; flex-shrink: 0; }
+    .mv-brand { font-size: 20px; font-weight: 800; letter-spacing: -.6px; flex-shrink: 0; }
     .mv-brand b { color: var(--target); font-weight: 800; }
-    .mv-wallet { display: flex; align-items: center; gap: 6px; }
-    .mv-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 700;
-      background: color-mix(in srgb, var(--surf) 80%, transparent); padding: 5px 9px; border-radius: 999px; color: var(--text); }
+    .mv-wallet { display: flex; align-items: center; gap: 5px; min-width: 0; }
+    .mv-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800;
+      background: color-mix(in srgb, var(--surf) 82%, transparent); border: 1px solid color-mix(in srgb, var(--line) 45%, transparent);
+      padding: 6px 9px; border-radius: 999px; color: var(--text); }
     .mv-chip svg { opacity: .95; }
     .mv-flame { color: #ff8a3d; }
-    .mv-boost { background: rgba(255,180,60,.2); color: var(--target); }
-    .mv-icobtn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
-      border: none; border-radius: 10px; background: color-mix(in srgb, var(--surf) 70%, transparent); color: var(--text); cursor: pointer; }
-    .mv-icobtn:active { transform: scale(.94); }
+    .mv-boost { background: color-mix(in srgb, var(--target) 22%, var(--surf)); color: var(--target); border-color: color-mix(in srgb, var(--target) 45%, transparent); }
+    .mv-icobtn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+      border: none; border-radius: 12px; background: color-mix(in srgb, var(--surf) 78%, transparent); color: var(--text); cursor: pointer;
+      transition: transform .08s, background .15s; }
+    .mv-icobtn:active { transform: scale(.92); }
+    /* on very narrow phones, drop chip padding + hide labels so the bar never wraps */
+    @media (max-width: 380px) {
+      .mv-top { padding-left: 10px; padding-right: 10px; }
+      .mv-chip { padding: 6px 7px; font-size: 12px; }
+      .mv-brand { font-size: 18px; }
+    }
 
     .mv-main { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
     /* board — a column that fills all space between the top bar and the nav */
-    .mv-board { flex: 1; min-height: 0; padding: 2px 16px 8px; display: flex; flex-direction: column; align-items: center; }
+    .mv-board { position: relative; flex: 1; min-height: 0; padding: 2px 16px 8px; display: flex; flex-direction: column; align-items: center; }
     .mv-mode-row { width: 100%; display: flex; justify-content: space-between; align-items: center; margin: 2px 0; min-height: 20px; }
     .mv-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--acc); }
     .mv-progress { display: inline-flex; align-items: center; gap: 6px; }
@@ -1053,18 +1077,20 @@ function StyleTag() {
     .mv-pbonus { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 800; color: var(--target);
       margin-left: 2px; }
 
-    /* target beacon */
-    .mv-target-wrap { margin: 2px 0; position: relative; flex-shrink: 0; }
+    /* target beacon — the one bold "bead" of the board */
+    .mv-target-wrap { margin: 3px 0 1px; position: relative; flex-shrink: 0; }
     .mv-beacon { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
-      width: clamp(74px, 13vh, 104px); height: clamp(74px, 13vh, 104px); border-radius: 34% 66% 62% 38% / 42% 40% 60% 58%;
-      background: radial-gradient(circle at 38% 32%, color-mix(in srgb, var(--target) 90%, #fff 30%), var(--target));
-      color: var(--ttext); box-shadow: 0 0 40px rgba(var(--tg), .5), inset 0 -8px 18px rgba(0,0,0,.15);
+      width: clamp(78px, 13.5vh, 108px); height: clamp(78px, 13.5vh, 108px); border-radius: 36% 64% 60% 40% / 44% 42% 58% 56%;
+      background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--target) 82%, #fff 40%), var(--target) 62%, color-mix(in srgb, var(--target) 78%, #000 22%));
+      color: var(--ttext); box-shadow: 0 12px 30px rgba(var(--tg), .38), 0 0 44px rgba(var(--tg), .42), inset 0 -9px 20px rgba(0,0,0,.18), inset 0 5px 12px rgba(255,255,255,.28);
       animation: mv-breathe 4.6s ease-in-out infinite; }
-    .mv-beacon::before { content:""; position: absolute; inset: -12px; border-radius: inherit; z-index: -1;
-      background: conic-gradient(from 0deg, rgba(var(--tg),.0), rgba(var(--tg),.5), rgba(var(--tg),0)); filter: blur(9px);
+    .mv-beacon::before { content:""; position: absolute; inset: -14px; border-radius: inherit; z-index: -1;
+      background: conic-gradient(from 0deg, rgba(var(--tg),0), rgba(var(--tg),.55), rgba(var(--tg),0)); filter: blur(10px);
       animation: mv-spin 9s linear infinite; }
-    .mv-beacon-label { font-size: 9px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; opacity: .65; margin-top: -1px; }
-    .mv-beacon-num { font-size: clamp(34px, 7vh, 46px); font-weight: 800; line-height: .92; letter-spacing: -1px; }
+    .mv-beacon::after { content:""; position: absolute; top: 15%; left: 24%; width: 34%; height: 26%; border-radius: 50%;
+      background: radial-gradient(circle at 40% 40%, rgba(255,255,255,.75), transparent 70%); pointer-events: none; }
+    .mv-beacon-label { font-size: 9px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; opacity: .7; margin-top: -1px; }
+    .mv-beacon-num { font-size: clamp(35px, 7.2vh, 48px); font-weight: 800; line-height: .92; letter-spacing: -1px; text-shadow: 0 1px 2px rgba(0,0,0,.12); }
     @keyframes mv-breathe { 0%,100% { transform: translateY(0) scale(1);} 50% { transform: translateY(-3px) scale(1.03);} }
     @keyframes mv-spin { to { transform: rotate(360deg);} }
     .mv-shake { animation: mv-shk .42s ease; }
@@ -1104,37 +1130,44 @@ function StyleTag() {
     .mv-builder.bank .mv-builder-total b, .mv-builder.bank .mv-eq-sign { color: #06231a; }
 
     /* operators — big, evenly spread, thumb-friendly */
-    .mv-ops { display: flex; align-items: center; gap: 8px; width: 100%; margin: 3px 0 6px; flex-shrink: 0; }
-    .mv-op { flex: 1; height: clamp(46px, 7vh, 56px); border-radius: 15px; border: none; cursor: pointer;
-      background: linear-gradient(160deg, var(--surf2), var(--surf)); color: var(--acc);
-      font-size: 26px; font-weight: 800; box-shadow: 0 3px 0 rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.08);
-      display: flex; align-items: center; justify-content: center; transition: transform .08s, box-shadow .08s; }
-    .mv-op:active { transform: translateY(3px); box-shadow: 0 0 0 rgba(0,0,0,.2); }
+    .mv-ops { display: flex; align-items: center; gap: 9px; width: 100%; margin: 4px 0 7px; flex-shrink: 0; }
+    .mv-op { flex: 1; height: clamp(48px, 7vh, 58px); border-radius: 16px; border: 1px solid color-mix(in srgb, var(--acc) 22%, transparent); cursor: pointer;
+      background: linear-gradient(165deg, color-mix(in srgb, var(--surf2) 96%, var(--acc)), var(--surf)); color: var(--acc);
+      font-size: 27px; font-weight: 800; box-shadow: 0 4px 0 color-mix(in srgb, var(--acc) 28%, rgba(0,0,0,.3)), inset 0 1px 0 rgba(255,255,255,.14);
+      display: flex; align-items: center; justify-content: center; transition: transform .08s, box-shadow .08s, background .12s; }
+    .mv-op:active { transform: translateY(4px); box-shadow: 0 0 0 rgba(0,0,0,.2); background: color-mix(in srgb, var(--acc) 20%, var(--surf)); }
 
     /* number ring — fills the remaining vertical space, sized in JS via --cd */
     .mv-circle-region { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }
     .mv-circle { position: relative; }
+    /* the abacus "rod" — a faint ring threading all the beads together */
+    .mv-circle::before { content:""; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: calc(var(--cd) * .74); height: calc(var(--cd) * .74); border-radius: 50%;
+      border: 2px solid color-mix(in srgb, var(--line) 55%, transparent);
+      box-shadow: inset 0 0 22px color-mix(in srgb, var(--acc) 8%, transparent); pointer-events: none; }
     .mv-tile { position: absolute; transform: translate(-50%, -50%);
       width: calc(var(--cd) * .30); height: calc(var(--cd) * .30);
       border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--edge) 55%, transparent); cursor: pointer;
-      background: radial-gradient(circle at 36% 30%, var(--tile), var(--tile2)); color: var(--ttx);
-      box-shadow: 0 6px 14px rgba(0,0,0,.32), inset 0 2px 3px rgba(255,255,255,.55), inset 0 -4px 8px rgba(0,0,0,.14);
+      background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--tile) 78%, #fff 22%), var(--tile) 55%, var(--tile2)); color: var(--ttx);
+      box-shadow: 0 8px 16px rgba(0,0,0,.34), inset 0 3px 5px rgba(255,255,255,.4), inset 0 -6px 10px rgba(0,0,0,.2);
       display: flex; align-items: center; justify-content: center; transition: transform .12s, opacity .18s, filter .18s; padding: 0; }
-    .mv-tile span { font-size: calc(var(--cd) * .123); font-weight: 800; letter-spacing: -.5px; }
+    .mv-tile::after { content:""; position: absolute; top: 15%; left: 24%; width: 32%; height: 24%; border-radius: 50%;
+      background: radial-gradient(circle at 40% 40%, rgba(255,255,255,.7), transparent 72%); pointer-events: none; }
+    .mv-tile span { font-size: calc(var(--cd) * .125); font-weight: 800; letter-spacing: -.5px; position: relative; z-index: 1; }
     .mv-tile:active { transform: translate(-50%, -50%) scale(.9); }
-    .mv-tile.used { opacity: .26; filter: grayscale(.5); pointer-events: none; transform: translate(-50%, -50%) scale(.8); }
+    .mv-tile.used { opacity: .24; filter: grayscale(.5); pointer-events: none; transform: translate(-50%, -50%) scale(.78); }
     .mv-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      width: calc(var(--cd) * .22); height: calc(var(--cd) * .22); min-width: 40px; min-height: 40px;
+      width: calc(var(--cd) * .22); height: calc(var(--cd) * .22); min-width: 44px; min-height: 44px;
       border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--acc) 45%, transparent); cursor: pointer;
-      background: color-mix(in srgb, var(--surf) 85%, transparent); color: var(--acc);
-      display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+      background: color-mix(in srgb, var(--surf) 88%, transparent); color: var(--acc);
+      display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 10px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.2); }
     .mv-center:active { transform: translate(-50%, -50%) rotate(90deg) scale(.92); }
 
     /* controls */
     .mv-controls { display: flex; gap: 8px; width: 100%; flex-shrink: 0; }
-    .mv-ctrl { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-      padding: 10px 8px; border-radius: 12px; border: none; cursor: pointer; font-size: 13px; font-weight: 700;
-      background: color-mix(in srgb, var(--surf) 70%, transparent); color: var(--text); transition: transform .08s; }
+    .mv-ctrl { flex: 1; min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 12px 8px; border-radius: 13px; border: 1px solid color-mix(in srgb, var(--line) 45%, transparent); cursor: pointer; font-size: 13px; font-weight: 800;
+      background: color-mix(in srgb, var(--surf) 74%, transparent); color: var(--text); transition: transform .08s; }
     .mv-ctrl:active { transform: scale(.96); }
     .mv-ctrl:disabled { opacity: .4; cursor: default; }
     .mv-ctrl.hint { background: color-mix(in srgb, var(--target) 22%, var(--surf)); color: var(--text); }
@@ -1189,16 +1222,17 @@ function StyleTag() {
     /* nav */
     .mv-nav { display: flex; padding: 5px 8px calc(5px + env(safe-area-inset-bottom)); gap: 4px; flex-shrink: 0;
       background: color-mix(in srgb, var(--bg) 82%, #000 6%); border-top: 1px solid color-mix(in srgb, var(--line) 40%, transparent); }
-    .mv-navbtn { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 2px;
-      border: none; background: none; cursor: pointer; color: var(--muted); border-radius: 12px; transition: color .15s; }
-    .mv-navbtn.active { color: var(--acc); }
+    .mv-navbtn { flex: 1; min-height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 6px 2px;
+      border: none; background: none; cursor: pointer; color: var(--muted); border-radius: 13px; transition: color .15s, background .15s; }
+    .mv-navbtn.active { color: var(--acc); background: color-mix(in srgb, var(--acc) 13%, transparent); }
+    .mv-navbtn:active { transform: scale(.95); }
     .mv-navico { position: relative; }
     .mv-navbadge { position: absolute; top: -2px; right: -4px; width: 8px; height: 8px; border-radius: 50%; background: var(--target); box-shadow: 0 0 8px var(--target); }
     .mv-navlbl { font-size: 11px; font-weight: 700; }
 
     /* toast */
-    .mv-toast { position: absolute; left: 50%; bottom: 78px; transform: translateX(-50%); z-index: 60;
-      padding: 10px 16px; border-radius: 12px; font-size: 13.5px; font-weight: 700; white-space: nowrap;
+    .mv-toast { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 60; pointer-events: none;
+      max-width: 88%; text-align: center; padding: 10px 16px; border-radius: 12px; font-size: 13.5px; font-weight: 700; white-space: normal;
       background: color-mix(in srgb, var(--surf2) 94%, #000 4%); color: var(--text); box-shadow: 0 8px 24px rgba(0,0,0,.4);
       animation: mv-toast-in .25s ease; border: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
     .mv-toast-good { border-color: var(--good); }
@@ -1297,8 +1331,8 @@ function StyleTag() {
     .mv-eyebrow-btn:active { transform: scale(.96); }
 
     /* companion Pal — absolutely placed so it never affects the one-screen layout */
-    .mv-pal { position: absolute; left: 10px; bottom: 66px; z-index: 40; pointer-events: none;
-      display: flex; flex-direction: column; align-items: center; }
+    .mv-pal { position: absolute; left: 8px; bottom: 84px; z-index: 40; pointer-events: none;
+      display: flex; flex-direction: column; align-items: flex-start; }
     .mv-pal-face { font-size: 40px; line-height: 1; filter: drop-shadow(0 6px 10px color-mix(in srgb, var(--pc, #000) 50%, transparent));
       animation: mv-palbob 2.6s ease-in-out infinite; }
     .mv-pal-face.cheer { animation: mv-palhop .55s cubic-bezier(.2,.9,.3,1.3); }

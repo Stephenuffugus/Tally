@@ -2,6 +2,8 @@
 /* A skin re-themes every surface via CSS tokens. Cosmetic only — never changes
    difficulty, solutions, or scoring. "Style, never advantage." */
 const SKINS = [
+  { id: "abacus", name: "Abacus", vibe: "Cream & navy beads", price: 0, currency: "coins",
+    v: { bg:"#f2e4cf", bg2:"#e6cfa8", surf:"#f8efdd", surf2:"#efe0c4", target:"#d2622e", tg:"210,98,46", ttext:"#fff3e6", tile:"#33455f", tile2:"#1f2c40", ttx:"#f5ead4", edge:"#5a6d8c", act:"#e88a54", acc:"#d2622e", acc2:"#3a5175", line:"#d3bd97", fill:"#ecdcbe", text:"#2c2416", muted:"#8a785b", good:"#4f9060", warn:"#c0472b", part:"#d2622e" } },
   { id: "twilight", name: "Twilight", vibe: "Dusk & amber", price: 0, currency: "coins",
     v: { bg:"#0d1326", bg2:"#182246", surf:"#1c2749", surf2:"#26335f", target:"#f5b544", tg:"245,181,68", ttext:"#2a1c00", tile:"#e9eefb", tile2:"#c3cef0", ttx:"#1a2444", edge:"#ffffff", act:"#ffd98a", acc:"#4fd1c5", acc2:"#7f9cf5", line:"#3b4a7a", fill:"#22305c", text:"#eaf0ff", muted:"#8ea0cf", good:"#5be3b0", warn:"#ff9a9a", part:"#ffd98a" } },
   { id: "sunrise", name: "Sunrise", vibe: "Coral morning", price: 0, currency: "coins",

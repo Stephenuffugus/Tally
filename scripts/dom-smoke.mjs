@@ -71,7 +71,15 @@ function findSolutions(pool, target) {
 const results = [];
 const A = (name, cond, extra = "") => results.push(`${cond ? "PASS" : "FAIL"}  ${name}${extra ? "  (" + extra + ")" : ""}`);
 
-await sleep(250);
+// Wait for the async meta load + first React commit to paint the board, rather
+// than a fixed sleep (which races the bundle-mount time under CPU contention).
+const waitFor = async (sel, ms = 4000) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < ms) { if (q(sel)) return true; await sleep(30); }
+  return false;
+};
+await waitFor(".mv-beacon-num");
+await sleep(200); // let StrictMode's double-mount effects settle before driving input
 A("board renders", !!q(".mv-board"));
 A("four operators + − × ÷", qa(".mv-op").map((b) => b.textContent).join("") === "+−×÷");
 A("no submit button (auto-commit UX)", qa(".mv-submit").length === 0);
