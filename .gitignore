@@ -1,0 +1,4 @@
+node_modules
+dist
+scripts/_bundle.cjs
+*.log
