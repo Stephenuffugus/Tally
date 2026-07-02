@@ -1,8 +1,8 @@
-# MathVerse
+# Tally
 
-A zen math puzzle game (think Wordscapes, but numbers). A ring of number tiles, a glowing target, four operators. Tap numbers and operators to build an equation; the instant it equals the target it banks automatically. Find every required way to clear the level. Full ecosystem included: coins/gems, 9 cosmetic skins, daily challenge with streaks + freezes, hints, boosts, stats, onboarding, keyboard play, haptics.
+A cozy number puzzle for all ages (think Wordscapes, but numbers). A ring of number tiles, a glowing target, four operators. Tap numbers and operators to build an equation; the instant it equals the target it banks automatically. Find every required way to clear the level. Full ecosystem: coins/gems, cosmetic **skins**, collectible companion **Pals** who cheer you on, a **Journey** of themed worlds, daily challenge with streaks + freezes, hints, boosts, stats, onboarding, keyboard play, haptics. Built for the Sky Wolf / Lucid Winds portal.
 
-Read `docs/HANDOFF.md` before starting real work — it has the full design rationale, research, economy spec, and the prioritized backlog.
+Read `Tally-HANDOFF.md` for the portal integration (embed contract, earn moments, nav map, localStorage keys, deploy). `docs/HANDOFF.md` is the original design rationale/spec/backlog.
 
 ## Commands
 
@@ -15,22 +15,24 @@ npm run test:dom   # bundles the real app, mounts in jsdom, plays a full puzzle
 npm run test:all   # both
 ```
 
-All three verification layers were green at handoff: 4/4 engine tests, 13/13 DOM smoke checks, clean `vite build`.
+All verification layers were green at handoff: 4/4 engine tests, 19/19 DOM smoke checks, clean `vite build` (relative paths via `base: "./"`).
 
 ## Structure
 
 | Path | What it is |
 |---|---|
 | `src/engine.js` | Pure puzzle logic: eval, solver, generator, RNG, difficulty curve. No React, no DOM — keep it that way. |
-| `src/config.js` | `SKINS` (theme token sets) + `ECONOMY` (every tunable reward/cost number). |
-| `src/storage.js` | Persistence adapter: `window.storage` (Claude artifact) else `localStorage`. One JSON blob, `mathverse:v1`. |
+| `src/config.js` | `SKINS`, `PALS` (companions), `WORLDS` (`worldOfLevel`), and `ECONOMY` (every tunable reward/cost). |
+| `src/wallet.js` | **The one marked earning choke point.** All coin/gem changes + first-time-only sunbeam earn-moment signals (`postMessage` to the portal). `EARN_MOMENTS` catalogue lives here. |
+| `src/storage.js` | Persistence adapter: `window.storage` (Claude artifact) else `localStorage`. One JSON blob, **`tally:v1`**. |
 | `src/audio.js` | Web Audio tone synth (`sfx`) + haptics (`buzz`). |
-| `src/Game.jsx` | The entire UI: state, handlers, Board/Shop/Stats/overlays + all CSS in one injected `<style>`. **Splitting this is backlog P0-1.** |
+| `src/Game.jsx` | The entire UI: state, handlers, Board/Journey/Shop/Stats/overlays + all CSS in one injected `<style>`. Screen switches go through `go()` which clears overlays. |
 | `src/App.jsx`, `src/main.jsx` | Thin shell. |
-| `tests/` | Engine invariants. |
-| `scripts/dom-smoke.mjs` | Full-loop UI test. Keep it green after every change. |
-| `artifact/mathverse.jsx` | Single-file twin that runs as a claude.ai artifact. This repo is now source of truth; the artifact is reference only. |
-| `docs/HANDOFF.md` | Vision, research, specs, backlog. |
+| `index.html` | Shell + verbatim Sky Wolf embed snippet (`SWS_EMBED`/`SWS_EXIT`). |
+| `.github/workflows/deploy.yml` | Builds `dist/` on push to `main` and deploys to GitHub Pages. |
+| `tests/`, `scripts/dom-smoke.mjs` | Engine invariants + full-loop UI test. Keep green after every change. |
+| `artifact/mathverse.jsx` | Legacy single-file twin (pre-rebrand), reference only. |
+| `docs/HANDOFF.md`, `Tally-HANDOFF.md` | Original design/backlog + portal integration handoff. |
 
 ## Hard product rules (do not violate)
 
@@ -41,6 +43,8 @@ All three verification layers were green at handoff: 4/4 engine tests, 13/13 DOM
 5. **No forced timers** in the core zen modes. Timed play only ever as a separate opt-in mode.
 6. **Every color comes from skin tokens** (CSS vars set from `SKINS[i].v`). No hardcoded theme colors in components.
 7. **Engine stays pure and tested.** Anything in `src/engine.js` must run in bare Node.
+8. **Pals are cosmetic too.** Companions only cheer — never touch difficulty, solutions, or scoring.
+9. **Portal safety.** Keep asset paths relative (`base: "./"`). Route all earning through `src/wallet.js`. Never `history.back()`; never auto-fullscreen; screen switches must clear overlays (use `go()`); keep the verbatim embed snippet in `index.html`; the game never awards sunbeams itself.
 
 ## Engine invariants (asserted in tests)
 
