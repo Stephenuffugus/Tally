@@ -26,6 +26,12 @@ export default function App() {
   const [meta, setMetaState] = useState(DEFAULT_META);
   const [screen, setScreen] = useState("play"); // play | map | daily | shop | stats
   const [overlay, setOverlay] = useState(null);  // null | win | settings | howto | skin:<id> | pal:<id>
+  // Add-to-Home-Screen bar on the main screen (Stephen 7/17: wants a visible
+  // button, not one buried in Settings). Shows unless already installed/embedded.
+  const [showInstall, setShowInstall] = useState(() => {
+    try { return typeof window !== "undefined" && !window.SWS_EMBED && !(window.TallyStandalone && window.TallyStandalone()); }
+    catch (e) { return false; }
+  });
   const [toast, setToast] = useState(null);
   const [particles, setParticles] = useState([]);
   const [winData, setWinData] = useState(null);
@@ -484,6 +490,16 @@ export default function App() {
 
       {/* toast */}
       {toast && <div className={"mv-toast mv-toast-" + toast.kind} key={toast.id} role="status" aria-live="polite">{toast.msg}</div>}
+
+      {/* add-to-home-screen bar — fixed above the nav so it never squeezes the board */}
+      {showInstall && (
+        <div style={{ position: "fixed", left: 0, right: 0, bottom: "calc(66px + env(safe-area-inset-bottom,0px))", display: "flex", justifyContent: "center", zIndex: 40, pointerEvents: "none", padding: "0 10px" }}>
+          <div style={{ pointerEvents: "auto", display: "flex", alignItems: "center", gap: 8, background: "#2c3e57", color: "#f2e4cf", borderRadius: 14, boxShadow: "0 6px 22px rgba(0,0,0,.28)", padding: "6px 6px 6px 15px", maxWidth: 420, width: "100%" }}>
+            <button onClick={() => { try { window.TallyInstall && window.TallyInstall(); } catch (e) {} }} style={{ flex: 1, border: "none", background: "none", font: "inherit", fontWeight: 700, fontSize: 15, cursor: "pointer", color: "inherit", minHeight: 44, textAlign: "left" }}>📲 Add to Home Screen</button>
+            <button onClick={() => setShowInstall(false)} aria-label="Dismiss" style={{ border: "none", background: "rgba(255,255,255,.12)", borderRadius: 9, width: 36, height: 36, cursor: "pointer", color: "inherit", fontSize: 15 }}>✕</button>
+          </div>
+        </div>
+      )}
 
       {/* bottom nav */}
       <nav className="mv-nav">
