@@ -919,8 +919,21 @@ function SettingsOverlay({ meta, onClose, onToggleSound, onToggleMotion, onToggl
         <Row label="Sound" on={meta.sound} onClick={onToggleSound} icon={meta.sound ? <Volume2 size={18} /> : <VolumeX size={18} />} />
         <Row label="Animations" on={meta.motion} onClick={onToggleMotion} icon={<Sparkles size={18} />} />
         <Row label="Haptics" on={meta.haptics} onClick={onToggleHaptics} icon={<Vibrate size={18} />} />
+        {/* Studio soundtrack + Add to Home Screen (Jul 17) */}
+        {!window.SWS_EMBED && (
+          <button className="mv-btn ghost" style={{ width: "100%", marginTop: 12 }}
+            onClick={() => { try { window.SWSMusicOpen && window.SWSMusicOpen(); } catch (e) { /* offline */ } }}>
+            ♫ Studio soundtrack
+          </button>
+        )}
+        {!(window.TallyStandalone && window.TallyStandalone()) && (
+          <button className="mv-btn ghost" style={{ width: "100%", marginTop: 8 }}
+            onClick={() => { try { window.TallyInstall && window.TallyInstall(); } catch (e) { /* no-op */ } }}>
+            📲 Add to Home Screen
+          </button>
+        )}
         {/* Sky Wolf portal exit — returns to the games hub (or closes the frame when embedded). */}
-        <button className="mv-btn ghost mv-exit" style={{ width: "100%", marginTop: 12 }} onClick={onExit}>
+        <button className="mv-btn ghost mv-exit" style={{ width: "100%", marginTop: 8 }} onClick={onExit}>
           <LogOut size={16} /> All Sky Wolf games
         </button>
         <div className="mv-set-note">Tally saves your progress on this device automatically.</div>

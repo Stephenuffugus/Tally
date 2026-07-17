@@ -1,0 +1,16 @@
+{
+  "name": "Tally",
+  "short_name": "Tally",
+  "description": "A cozy number puzzle for all ages. Combine the numbers, hit the target, collect pals who cheer you on.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f2e4cf",
+  "theme_color": "#f2e4cf",
+  "categories": ["games", "education"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
