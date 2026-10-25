@@ -680,5 +680,54 @@
     ]
    ]
   }
+ },
+ "ui": {
+  "logo": "ui/logo.webp",
+  "win_banner": "ui/win_banner.webp",
+  "daily_card": "ui/daily_card.webp",
+  "star_full": "ui/star_full.webp",
+  "star_empty": "ui/star_empty.webp",
+  "coin": "ui/coin.webp",
+  "gem": "ui/gem.webp",
+  "hint": "ui/hint.webp",
+  "freeze": "ui/freeze.webp",
+  "double_coins": "ui/double_coins.webp",
+  "streak_flame": "ui/streak_flame.webp",
+  "splash": "ui/splash.webp"
+ },
+ "fx": {
+  "bank": [
+   "fx/bank_01.webp",
+   "fx/bank_02.webp",
+   "fx/bank_03.webp",
+   "fx/bank_04.webp",
+   "fx/bank_05.webp"
+  ],
+  "confetti": [
+   "fx/confetti_01.webp",
+   "fx/confetti_02.webp",
+   "fx/confetti_03.webp",
+   "fx/confetti_04.webp",
+   "fx/confetti_05.webp"
+  ],
+  "star_pop": [
+   "fx/star_pop_01.webp",
+   "fx/star_pop_02.webp",
+   "fx/star_pop_03.webp",
+   "fx/star_pop_04.webp"
+  ]
+ },
+ "skins": {
+  "abacus": "skins/abacus.webp",
+  "twilight": "skins/twilight.webp",
+  "sunrise": "skins/sunrise.webp",
+  "forest": "skins/forest.webp",
+  "ink": "skins/ink.webp",
+  "ocean": "skins/ocean.webp",
+  "sakura": "skins/sakura.webp",
+  "neon": "skins/neon.webp",
+  "ember": "skins/ember.webp",
+  "aurora": "skins/aurora.webp",
+  "bubblegum": "skins/bubblegum.webp"
  }
 }

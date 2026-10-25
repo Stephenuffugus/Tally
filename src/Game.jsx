@@ -74,6 +74,18 @@ export default function App() {
     return () => { go = false; };
   }, []);
 
+  useEffect(() => {   // Part 3: Astra's splash plate (index.html) fades once the game is up
+    if (!loaded) return;
+    const el = document.getElementById("mv-splashplate"); if (!el) return;
+    el.classList.add("out"); const t = setTimeout(() => el.remove(), 320); return () => clearTimeout(t);
+  }, [loaded]);
+  const dailyKeyRef = useRef(todayKey());
+  useEffect(() => {   // Part 3: a new day while the tab is open makes a new daily (the backlog boundary); checked on a timer and on focus
+    if (!loaded) return;
+    const check = () => { const k = todayKey(); if (k !== dailyKeyRef.current) { dailyKeyRef.current = k; setDaily(genPuzzle(k, { poolSize: 5, lo: 1, hi: 22, tMin: 12, tMax: 99, reqCap: 3 })); } };
+    const iv = setInterval(check, 30000); window.addEventListener("focus", check); document.addEventListener("visibilitychange", check);
+    return () => { clearInterval(iv); window.removeEventListener("focus", check); document.removeEventListener("visibilitychange", check); };
+  }, [loaded]);
   const setMeta = useCallback((updater) => {
     setMetaState((prev) => {
       const next = typeof updater === "function" ? updater(prev) : updater;
@@ -438,6 +450,8 @@ export default function App() {
   }
 
   const onBoardScreen = screen === "play" || screen === "daily";
+  const dailyInfo = { date: new Date().toLocaleDateString(undefined, { month: "short", day: "numeric" }), done: meta.lastDaily === isoDay(),
+    streak: meta.streak, freezes: meta.freezes, atRisk: meta.streak > 0 && meta.lastDaily !== isoDay() && daysBetween(meta.lastDaily, isoDay()) > 1 };
   const barShown = showInstall && (!onBoardScreen || viewH >= 740);
   return (
     <div className={"mv-root" + (motion ? "" : " mv-nomotion") + (barShown ? " mv-hasbar" : "")} style={rootStyle}>
@@ -445,7 +459,7 @@ export default function App() {
 
       {/* top bar */}
       <header className="mv-top">
-        <div className="mv-brand"><span>Ta</span><b>lly</b></div>
+        <div className="mv-brand"><img className="mv-wordmark" src={uiArt("logo")} alt="Tally" width="110" height="44" draggable="false" /></div>
         <div className="mv-wallet">
           {boostActive && <span className="mv-chip mv-boost" title="Double coins active" aria-label="Double coins active"><Zap size={13} /><span className="mv-chip-x"> 2×</span></span>}
           {meta.streak > 0 && <span className="mv-chip" title="Daily streak"><Flame size={14} className="mv-flame" /> {meta.streak}</span>}
@@ -464,6 +478,7 @@ export default function App() {
             screen={screen}
             level={campaignLevel}
             campaignLevel={campaignLevel}
+            daily={dailyInfo}
             pal={pal}
             palSay={palSay}
             palEvent={palEvent}
@@ -535,7 +550,7 @@ export default function App() {
 
       {/* overlays */}
       {overlay === "win" && winData && (
-        <WinOverlay data={winData} onNext={nextLevel} onShare={shareResult} onClose={() => setOverlay(null)} mode={screen} />
+        <WinOverlay pal={pal} still={!motion || prefersReducedMotion()} data={winData} onNext={nextLevel} onShare={shareResult} onClose={() => setOverlay(null)} mode={screen} />
       )}
       {overlay === "settings" && (
         <SettingsOverlay meta={meta} onClose={() => setOverlay(null)}
@@ -602,7 +617,11 @@ function Board(props) {
       {/* mode + progress */}
       <div className="mv-mode-row">
         {screen === "daily" ? (
-          <span className="mv-eyebrow">Daily Challenge</span>
+          <div className="mv-dailycard" style={{ backgroundImage: "url(" + uiArt("daily_card") + ")" }}>
+            <div className="mv-dailydate">Daily for {props.daily ? props.daily.date : "today"}</div>
+            <div className="mv-dailystate">{props.daily && props.daily.done ? "Done today, a replay is just for fun" : "Not played yet"}</div>
+            <div className="mv-dailystreak">{props.daily ? props.daily.streak : 0} days played{props.daily && props.daily.atRisk && props.daily.freezes > 0 ? ". A freeze will keep this streak" : ""}</div>
+          </div>
         ) : (
           <button className="mv-eyebrow mv-eyebrow-btn" onClick={onOpenMap} aria-label={"Open the world map, " + W.world.name + ", level " + level}>
             <img className="mv-worldbadge" src={worldArt(W.world.id, "badge")} alt="" draggable="false" /> {W.world.name} · {level}
@@ -636,6 +655,7 @@ function Board(props) {
 
       {/* equation builder + live total */}
       <div className={"mv-builder" + (completeWrong ? " wrong" : "") + (banking ? " bank" : "")}>
+        {banking && !props.palStill && <Frames key="bank" className="mv-bankfx" files={ART.fx.bank} ms={60} />}
         <div className="mv-builder-eq-area">
           {!showEq ? (
             <span className="mv-builder-hint">tap a number to start</span>
@@ -702,6 +722,18 @@ function palSrc(id, name) { return "./art/" + ART.version + "/pals/" + id + "/" 
 function worldArt(id, kind) {   // Part 2: the plates, badges and map panels (art/t1/worlds and art/t1/map)
   const w = ART.worlds && (ART.worlds[id] || ART.worlds.endless);
   return w ? "./art/" + ART.version + "/" + w[kind] : "";
+}
+function uiArt(name) { return "./art/" + ART.version + "/" + ((ART.ui && ART.ui[name]) || ("ui/" + name + ".webp")); }   // Part 3
+/* Part 3: a frame strip from Astra's files: plays once (then renders nothing) or loops; `still` shows the last frame only */
+function Frames({ files, ms, loop, still, className, size }) {
+  const [i, setI] = useState(still ? files.length - 1 : 0);
+  useEffect(() => {
+    if (still) return;
+    const t = setInterval(() => setI((k) => (k + 1 < files.length ? k + 1 : (loop ? 0 : files.length))), ms);
+    return () => clearInterval(t);
+  }, [files, ms, loop, still]);
+  if (i >= files.length) return null;
+  return <img className={className} src={"./art/" + ART.version + "/" + files[i]} alt="" draggable="false" style={size ? { width: size, height: size } : undefined} />;
 }
 function prefersReducedMotion() {
   try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; }
@@ -835,9 +867,10 @@ function Shop({ meta, boostActive, onBuySkin, onEquipSkin, onPreviewSkin, onBuyP
             const equipped = meta.skin === s.id;
             return (
               <div key={s.id} className="mv-skincard" onClick={() => onPreviewSkin(s.id)}>
-                <div className="mv-skinswatch" style={{ background: `linear-gradient(150deg, ${s.v.bg2}, ${s.v.bg})` }}>
+                <div className="mv-skinswatch" style={{ background: ART.skins && ART.skins[s.id] ? "none" : `linear-gradient(150deg, ${s.v.bg2}, ${s.v.bg})` }}>
+                  {ART.skins && ART.skins[s.id] ? <img className="mv-skinpic" src={"./art/" + ART.version + "/" + ART.skins[s.id]} alt="" draggable="false" /> : <>
                   <span className="mv-swatch-target" style={{ background: s.v.target, boxShadow: `0 0 18px rgba(${s.v.tg},.7)` }} />
-                  <span className="mv-swatch-tile" style={{ background: `linear-gradient(160deg, ${s.v.tile}, ${s.v.tile2})`, color: s.v.ttx }}>7</span>
+                  <span className="mv-swatch-tile" style={{ background: `linear-gradient(160deg, ${s.v.tile}, ${s.v.tile2})`, color: s.v.ttx }}>7</span></>}
                   {equipped && <span className="mv-equipped"><Check size={12} /></span>}
                 </div>
                 <div className="mv-skinmeta">
@@ -981,17 +1014,29 @@ function Stats({ meta }) {
 }
 
 /* ------------------------------ OVERLAYS ---------------------------------- */
-function WinOverlay({ data, onNext, onShare, mode }) {
+function WinOverlay({ data, onNext, onShare, mode, pal, still }) {
+  const replay = mode === "daily" && data.dailyMsg === "Replayed today's daily";
+  const confetti = !still && !replay;   // once, on a clear; never on a daily replay, never under reduced motion
+  const palFrames = pal && ART.pals[pal.id] ? [1, 2, 3, 4, 5, 6].map((k) => "pals/" + pal.id + "/win_0" + k + ".webp") : null;
   return (
     <div className="mv-scrim">
+      {confetti && <Frames key={"confetti" + data.target} className="mv-confetti" files={ART.fx.confetti} ms={90} />}
       <div className="mv-modal mv-win">
         <div className="mv-win-glow" />
-        <div className="mv-win-title">{mode === "daily" ? "Daily complete" : "Round complete"}</div>
-        <div className="mv-stars">
-          {[0, 1, 2].map((i) => (
-            <Star key={i} size={42} className={"mv-star" + (i < data.stars ? " lit" : "")}
-              fill={i < data.stars ? "currentColor" : "none"} style={{ animationDelay: i * 0.12 + "s" }} />
-          ))}
+        <div className="mv-win-head">
+          <img className="mv-win-banner" src={uiArt("win_banner")} alt="" draggable="false" />
+          <div className="mv-win-title">{mode === "daily" ? "Daily complete" : "Round complete"}</div>
+        </div>
+        <div className="mv-win-row">
+          <div className="mv-stars">
+            {[0, 1, 2].map((i) => (
+              <span key={i} className={"mv-starwrap" + (i < data.stars ? " lit" : "")} style={{ animationDelay: i * 0.12 + "s" }}>
+                <img className="mv-starimg" src={uiArt(i < data.stars ? "star_full" : "star_empty")} alt={i < data.stars ? "star earned" : "star not earned"} draggable="false" />
+                {i < data.stars && !still && <Frames key={"pop" + i + data.target} className="mv-starpop" files={ART.fx.star_pop} ms={60} />}
+              </span>
+            ))}
+          </div>
+          {palFrames && <div className="mv-winpal"><Frames key={"winpal" + data.target} files={palFrames} ms={180} loop still={still} /></div>}
         </div>
         <div className="mv-star-conds">
           <Cond ok={data.star1} label="Reach the target" />
@@ -1240,6 +1285,30 @@ function StyleTag() {
     .mv-lvl .mv-lvlstars { font-size: 11.5px; }
     @keyframes mv-lvlpulse { 0%,100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.07); } }
     .mv-nomotion .mv-lvl.current { animation: none; }
+    /* Part 3: the wordmark, the painted win, the bank frames, the daily card, the skin cards */
+    .mv-wordmark { display: block; width: 110px; height: 44px; object-fit: contain; }
+    .mv-win { position: relative; overflow: hidden; }
+    .mv-win-head { position: relative; width: min(100%, 300px); margin: -4px auto 4px; }
+    .mv-win-banner { display: block; width: 100%; height: auto; pointer-events: none; }
+    .mv-win-head .mv-win-title { position: absolute; left: 15%; right: 15%; top: 50%; transform: translateY(-58%); margin: 0; text-align: center; font-size: 19px; line-height: 1.1; color: #2c2416; }
+    .mv-win-row { display: flex; align-items: center; justify-content: center; gap: 14px; }
+    .mv-starwrap { position: relative; display: inline-block; width: 42px; height: 42px; }
+    .mv-starimg { width: 42px; height: 42px; display: block; }
+    .mv-starwrap.lit .mv-starimg { animation: mv-starin .5s cubic-bezier(.3,1.5,.5,1) both; }
+    @keyframes mv-starin { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .mv-starpop { position: absolute; left: 50%; top: 50%; width: 96px; height: 96px; transform: translate(-50%, -50%); pointer-events: none; }
+    .mv-winpal img { width: 128px; height: 128px; object-fit: contain; display: block; }
+    @media (min-width: 412px) { .mv-winpal img { width: 160px; height: 160px; } }
+    .mv-confetti { position: fixed; left: 50%; top: 50%; width: min(100vw, 450px); height: min(100vw, 450px); transform: translate(-50%, -50%); pointer-events: none; z-index: 2; object-fit: contain; }
+    .mv-nomotion .mv-starwrap.lit .mv-starimg { animation: none; }
+    .mv-bankfx { position: absolute; left: 50%; top: 50%; width: 128px; height: 128px; transform: translate(-50%, -50%); pointer-events: none; z-index: 3; }
+    .mv-dailycard { width: 100%; max-width: 220px; aspect-ratio: 450 / 300; background: center / 100% 100% no-repeat; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; text-align: center; padding: 8px 12px; box-sizing: border-box; margin: 0 auto 2px; }
+    @media (max-height: 700px) { .mv-dailycard { background-image: none !important; background-color: color-mix(in srgb, var(--surf) 86%, transparent); aspect-ratio: auto; max-width: none; width: auto; border-radius: 999px; padding: 5px 12px; margin: 0 auto 2px; flex-direction: row; flex-wrap: wrap; column-gap: 8px; row-gap: 0; justify-content: center; }
+      .mv-dailydate { font-size: 10.5px; letter-spacing: 1.5px; } .mv-dailystate { font-size: 12px; } .mv-dailystreak { font-size: 11px; } }
+    .mv-dailydate { font-size: 11.5px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--acc); }
+    .mv-dailystate { font-size: 14px; font-weight: 800; color: var(--text); }
+    .mv-dailystreak { font-size: 12.5px; font-weight: 700; color: var(--muted); }
+    .mv-skinpic { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
     .mv-mode-row { width: 100%; display: flex; justify-content: space-between; align-items: center; margin: 2px 0; min-height: 20px; }
     .mv-eyebrow { font-size: 11.5px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--acc); }
     .mv-progress { display: inline-flex; align-items: center; gap: 6px; }

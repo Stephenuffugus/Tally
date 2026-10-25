@@ -104,6 +104,6 @@ export const ECONOMY = {
 };
 
 // The build a phone holds, shown small in Settings. Bump with every deploy (package.json version, sw.js CACHE, the ?v= on sw.js).
-export const TALLY_BUILD = "t2";
+export const TALLY_BUILD = "t3";
 
 export { SKINS, skinById, PALS, palById, WORLDS, WORLD_SIZE, worldOfLevel };

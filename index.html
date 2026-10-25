@@ -40,7 +40,7 @@
     (function(){
       try{
         if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
-          window.addEventListener('load',function(){ navigator.serviceWorker.register('./sw.js?v=4')['catch'](function(){}); });
+          window.addEventListener('load',function(){ navigator.serviceWorker.register('./sw.js?v=5')['catch'](function(){}); });
         }
       }catch(e){}
       var deferred=null;
@@ -74,6 +74,9 @@
     <style>html, body, #root { height: 100%; } body { margin: 0; background: #f2e4cf; overscroll-behavior: none; }</style>
   </head>
   <body>
+<!-- Part 3: Astra's splash until React mounts (App fades it out 300 ms after load) -->
+<div id="mv-splashplate" aria-hidden="true"><img src="./art/t1/ui/logo.webp" alt="" width="250" height="100" draggable="false"></div>
+<style>#mv-splashplate{position:fixed;inset:0;z-index:100;background:#f2e4cf url(./art/t1/ui/splash.webp) center/cover no-repeat;display:flex;align-items:flex-start;justify-content:center;padding-top:14vh;transition:opacity .3s ease;}#mv-splashplate img{width:min(60vw,250px);height:auto;filter:drop-shadow(0 4px 12px rgba(0,0,0,.25));}#mv-splashplate.out{opacity:0;pointer-events:none;}</style>
     <div id="root"></div>
     <button id="sws-music-proxy" style="display:none" aria-hidden="true"></button>
     <script type="module" src="/src/main.jsx"></script>
