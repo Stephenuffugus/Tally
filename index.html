@@ -4,11 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#f2e4cf" />
-    <meta name="description" content="Tally — a cozy number puzzle for all ages. Combine the numbers to hit the target, find every way, and collect cheerful pals to root you on." />
+    <meta name="description" content="Tally, a cozy number puzzle for all ages. Combine the numbers to hit the target, find the ways, and collect cheerful pals who cheer with you." />
 
     <!-- Social / portal card -->
     <meta property="og:title" content="Tally" />
-    <meta property="og:description" content="A cozy number puzzle for all ages — combine the numbers, hit the target, collect pals who cheer you on." />
+    <meta property="og:description" content="A cozy number puzzle for all ages. Combine the numbers, hit the target, collect pals who cheer with you." />
     <meta property="og:image" content="./thumbnail.png" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -40,7 +40,7 @@
     (function(){
       try{
         if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
-          window.addEventListener('load',function(){ navigator.serviceWorker.register('./sw.js')['catch'](function(){}); });
+          window.addEventListener('load',function(){ navigator.serviceWorker.register('./sw.js?v=2')['catch'](function(){}); });
         }
       }catch(e){}
       var deferred=null;

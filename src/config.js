@@ -34,35 +34,35 @@ const skinById = (id) => SKINS.find((s) => s.id === id) || SKINS[0];
    more Pals is the game's "collect friends" ecosystem. */
 const PALS = [
   { id: "pip", name: "Pip", face: "🦊", vibe: "The plucky fox", price: 0, currency: "coins", color: "#ff9e5a",
-    cheers: ["Nice one!", "You got this!", "Woohoo!", "Keep going!", "So smart!"],
-    win: "You did it! High five! 🐾" },
+    cheers: ["A new way found", "Nice thinking", "That fits just right", "One step closer", "You found another path"],
+    win: "Look at all the ways you found" },
   { id: "hoot", name: "Hoot", face: "🦉", vibe: "The wise owl", price: 0, currency: "coins", color: "#a98bff",
-    cheers: ["Clever!", "Well figured!", "Brilliant.", "Hoo-ray!", "Sharp thinking!"],
-    win: "A puzzle well solved. Whoo-hoo!" },
+    cheers: ["A thoughtful choice", "That adds up", "A clever connection", "You spotted a pattern", "Another idea worked"],
+    win: "Your ideas came together" },
   { id: "bram", name: "Bram", face: "🐻", vibe: "The cozy bear", price: 200, currency: "coins", color: "#c88a5a",
-    cheers: ["Beary good!", "Yesss!", "Sweet!", "Nice math!", "Un-bear-ievable!"],
-    win: "Big bear hug for that one! 🤗" },
+    cheers: ["A lovely little solve", "Take your time", "That was worth a try", "Another one for the collection", "You kept going"],
+    win: "A cozy round well solved" },
   { id: "nibble", name: "Nibble", face: "🐰", vibe: "The hoppy bunny", price: 300, currency: "coins", color: "#ff8fb0",
-    cheers: ["Hop hop!", "Ooh nice!", "Speedy!", "Yay!", "Carrot-tastic!"],
-    win: "That was egg-cellent! Hop hop! 🥕" },
+    cheers: ["One little hop closer", "A fresh way through", "You caught that one", "Another bright idea", "That was a neat turn"],
+    win: "Look how far you hopped" },
   { id: "sprout", name: "Sprout", face: "🐸", vibe: "The chill frog", price: 400, currency: "coins", color: "#7ee06a",
-    cheers: ["Ribbit-tastic!", "Leap of genius!", "Cool!", "Nice hop!", "So fresh!"],
-    win: "You leaped right to it! Ribbit! 🌿" },
+    cheers: ["That idea grew", "A small step counts", "You found your rhythm", "Another good thought", "Room for one more idea"],
+    win: "You made something grow" },
   { id: "cosmo", name: "Cosmo", face: "🐱", vibe: "The curious cat", price: 550, currency: "coins", color: "#ffcf5a",
-    cheers: ["Purr-fect!", "Meow yes!", "Slick!", "Paws-itively great!", "Nice!"],
-    win: "Purr-fectly solved! 🐾" },
+    cheers: ["Curiosity pays off", "An interesting route", "You spotted something", "That was a tidy solve", "Another mystery solved"],
+    win: "A whole round of discoveries" },
   { id: "bolt", name: "Bolt", face: "🤖", vibe: "The math robot", price: 750, currency: "coins", color: "#4be3ff",
-    cheers: ["Computing… correct!", "Beep boop yes!", "Optimal!", "Affirmative!", "Processing joy!"],
-    win: "Calculation complete. You win! ⚡" },
+    cheers: ["Pattern found", "That route works", "A fine calculation", "Another match recorded", "Good connection"],
+    win: "Every idea counted" },
   { id: "splash", name: "Splash", face: "🐳", vibe: "The gentle whale", price: 900, currency: "coins", color: "#5ab8ff",
-    cheers: ["Whale done!", "Splash-tastic!", "Deep thinking!", "Making waves!", "Bloop!"],
-    win: "You made a whale of a splash! 🌊" },
+    cheers: ["A lovely little ripple", "You found a new current", "Steady thinking", "Another wave of ideas", "That flows nicely"],
+    win: "A sea of good thinking" },
   { id: "flame", name: "Flare", face: "🐲", vibe: "The friendly dragon", price: 12, currency: "gems", color: "#ff7a3d",
-    cheers: ["Fire!", "Blazing fast!", "Roar-some!", "Smokin'!", "Legendary!"],
-    win: "That was fire! Roooar! 🔥" },
+    cheers: ["A bright little spark", "That idea shines", "You found your fire", "Another golden thought", "A warm little victory"],
+    win: "You made the whole round glow" },
   { id: "star", name: "Star", face: "🦄", vibe: "The magic unicorn", price: 20, currency: "gems", color: "#d9a7ff",
-    cheers: ["Magical!", "Sparkle!", "Wondrous!", "Pure magic!", "Shine on!"],
-    win: "Absolutely magical! ✨🦄" },
+    cheers: ["A little wonder found", "Your idea sparkles", "Another lovely path", "That was a bright thought", "A new possibility"],
+    win: "Look at the wonders you found" },
 ];
 const palById = (id) => PALS.find((p) => p.id === id) || PALS[0];
 
@@ -102,5 +102,8 @@ export const ECONOMY = {
   BOOST_COST_GEMS: 5,
   BOOST_HOURS: 24,
 };
+
+// The build a phone holds, shown small in Settings. Bump with every deploy (package.json version, sw.js CACHE, the ?v= on sw.js).
+export const TALLY_BUILD = "t0";
 
 export { SKINS, skinById, PALS, palById, WORLDS, WORLD_SIZE, worldOfLevel };

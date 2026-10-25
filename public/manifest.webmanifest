@@ -1,7 +1,7 @@
 {
   "name": "Tally",
   "short_name": "Tally",
-  "description": "A cozy number puzzle for all ages. Combine the numbers, hit the target, collect pals who cheer you on.",
+  "description": "A cozy number puzzle for all ages. Combine the numbers, hit the target, collect pals who cheer with you.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

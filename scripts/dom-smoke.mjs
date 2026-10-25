@@ -6,7 +6,9 @@ import { createRequire } from "node:module";
 import { writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { evalExpr, OPS, sigOf } from "../src/engine.js";
+import { evalExpr, OPS, sigOf, genPuzzle, levelOpts } from "../src/engine.js";
+import * as CFG from "../src/config.js";   // a namespace, so an older copy without TALLY_BUILD still runs (and fails its check)
+const { PALS, ECONOMY, TALLY_BUILD } = CFG;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -35,16 +37,36 @@ globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} 
 globalThis.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 0);
 
 let savedMeta = null;
+let seed = { seenIntro: true };   // what the "saved game" holds at mount (phase 2 seeds a level)
 dom.window.storage = {
-  get: async () => ({ value: JSON.stringify({ seenIntro: true }) }),
+  get: async () => ({ value: JSON.stringify(seed) }),
   set: async (_k, v) => { savedMeta = v; return {}; },
   delete: async () => ({}), list: async () => ({ keys: [] }),
 };
 
 const require = createRequire(import.meta.url);
 const { mount } = require(outfile);
-const el = document.getElementById("root");
-mount(el);
+let el = document.getElementById("root");
+const rootA = mount(el);
+
+// Player copy law: no "!" and no dashes in ANY text that ever renders (toasts and
+// the pal's bubble included), so every text node that appears is recorded.
+const BAD = /[!\u2010-\u2015]|[A-Za-z]-[A-Za-z]| - /;
+const seenText = new Set();
+const noteText = (n) => {
+  if (!n) return;
+  if (n.nodeType === 3) { if (n.parentNode && n.parentNode.tagName === "STYLE") return; const t = n.data.trim(); if (t) seenText.add(t); return; }
+  if (n.nodeType === 1 && n.tagName !== "STYLE" && n.tagName !== "SCRIPT") n.childNodes.forEach(noteText);
+};
+new dom.window.MutationObserver((muts) => { for (const m of muts) { if (m.type === "characterData") noteText(m.target); else m.addedNodes.forEach(noteText); } })
+  .observe(document.body, { childList: true, subtree: true, characterData: true });
+const unnamed = new Set();   // icon buttons seen without an accessible name
+const namedIcons = new Set();
+const noteIcons = () => [...document.querySelectorAll(".mv-icobtn")].forEach((b) => { const n = (b.getAttribute("aria-label") || "").trim(); if (!n) unnamed.add(b.outerHTML.slice(0, 60)); else namedIcons.add(n); });
+const star3Label = (p) => p.total - p.required >= 2 ? "Find two bonus ways" : "Find every way";
+const star2Label = (hasClean) => hasClean ? "Find a two number solution" : "Find one extra way";
+const condTexts = () => [...document.querySelectorAll(".mv-cond")].map((c) => c.textContent.trim());
+const paidLine = `Paid at the bank: ${ECONOMY.SOLVE_COINS} a way, ${ECONOMY.BONUS_COINS} a bonus`;
 
 const q = (s) => el.querySelector(s);
 const qa = (s) => [...el.querySelectorAll(s)];
@@ -112,9 +134,21 @@ const nextBtn = q(".mv-ctrl.next");
 A("Next appears after clearing required", !!nextBtn);
 if (nextBtn) { click(nextBtn); await sleep(120); }
 A("win summary opens", !!q(".mv-win-title"));
+const P1 = genPuzzle(1001, levelOpts(1));
+A("star 2 label follows the puzzle (level 1)", condTexts()[1] === star2Label(P1.hasClean), JSON.stringify(condTexts()[1]) + " hasClean=" + P1.hasClean);
+A("star 3 label follows the puzzle (level 1)", condTexts()[2] === star3Label(P1), JSON.stringify(condTexts()[2]));
+A("results name the bank pay", (q(".mv-win-paid") || {}).textContent === paidLine, (q(".mv-win-paid") || {}).textContent);
 key("Enter"); await sleep(150);
 A("Enter advances to a fresh puzzle", !q(".mv-win-title") && qa(".mv-findchip").length === 0);
 A("level persisted", JSON.parse(savedMeta).level === 2, "level=" + JSON.parse(savedMeta).level);
+// level 2 has one way beyond the two required: its star 3 can only mean finding every way
+const P2 = genPuzzle(1002, levelOpts(2));
+const pool2 = qa(".mv-tile").map((t) => parseInt(t.textContent, 10));
+const sols2 = findSolutions(pool2, parseInt(q(".mv-beacon-num").textContent, 10));
+for (let i = 0; i < P2.required && i < sols2.length; i++) await play(sols2[i]);
+if (q(".mv-ctrl.next")) { click(q(".mv-ctrl.next")); await sleep(150); }
+A("star 3 label follows the puzzle (level 2)", condTexts()[2] === star3Label(P2), JSON.stringify(condTexts()[2]) + " total=" + P2.total + " required=" + P2.required);
+key("Enter"); await sleep(150);
 
 // Journey map + Pals shop (new screens)
 const navBtn = (label) => qa(".mv-navbtn").find((b) => b.textContent.includes(label));
@@ -126,6 +160,53 @@ A("shop opens on Pals tab", qa(".mv-palface").length >= 1);
 const skinsTab = qa(".mv-shoptab").find((b) => b.textContent.includes("Skins"));
 click(skinsTab); await sleep(80);
 A("shop can switch to Skins tab", qa(".mv-skinswatch").length >= 1);
+
+// Phase 2: a fresh mount on a seeded save whose level HAS a two number solution.
+const LC = (() => { for (let L = 2; L <= 48; L++) if (genPuzzle(1000 + L, levelOpts(L)).hasClean) return L; return 0; })();
+const PC = genPuzzle(1000 + LC, levelOpts(LC));
+rootA.unmount();
+el = document.createElement("div"); document.body.appendChild(el);
+seed = { seenIntro: true, level: LC };
+mount(el);
+await waitFor(".mv-beacon-num"); await sleep(200);
+const poolB = qa(".mv-tile").map((t) => parseInt(t.textContent, 10));
+const targetB = parseInt(q(".mv-beacon-num").textContent, 10);
+A("seeded save opens level " + LC, targetB === PC.target, "target=" + targetB + " want " + PC.target);
+const solsB = findSolutions(poolB, targetB);
+for (let i = 0; i < PC.required && i < solsB.length; i++) await play(solsB[i]);
+const nextB = q(".mv-ctrl.next");
+if (nextB) { click(nextB); await sleep(150); }
+A("star 2 label follows the puzzle (level " + LC + ")", condTexts()[1] === star2Label(PC.hasClean), JSON.stringify(condTexts()[1]) + " hasClean=" + PC.hasClean);
+A("star 3 label follows the puzzle (level " + LC + ")", condTexts()[2] === star3Label(PC), JSON.stringify(condTexts()[2]));
+key("Enter"); await sleep(150);
+noteIcons();
+click(q('[aria-label="Settings"]')); await sleep(80); noteIcons();
+A("Settings shows the build", (q(".mv-set-build") || {}).textContent === "Build " + TALLY_BUILD, (q(".mv-set-build") || {}).textContent);
+click(q(".mv-modal-head .mv-icobtn")); await sleep(60);
+click(q('[aria-label="How to play"]')); await sleep(80); noteIcons();
+click(q(".mv-modal-head .mv-icobtn")); await sleep(60);
+for (const label of ["Daily", "Stats", "Map", "Shop"]) { click(navBtn(label)); await sleep(100); noteText(el); }
+click(q(".mv-skincard")); await sleep(80); noteIcons(); noteText(el);   // the first pal's preview
+click(q(".mv-preview-x")); await sleep(60);
+click(qa(".mv-shoptab").find((b) => b.textContent.includes("Skins"))); await sleep(80);
+click(q(".mv-skincard")); await sleep(80); noteIcons(); noteText(el);   // the first skin's preview
+click(q(".mv-preview-x")); await sleep(60);
+click(qa(".mv-shoptab").find((b) => b.textContent.includes("Boosts"))); await sleep(80); noteText(el);
+A("every icon button has a name", unnamed.size === 0 && namedIcons.size >= 6, [...unnamed].join(" | ") + " named=" + namedIcons.size);
+// every stamp moves together: package.json 0.N.0, sw.js CACHE tally-vN, register ./sw.js?v=N, TALLY_BUILD t(N-2)
+{
+  const fs = await import("node:fs");
+  const minor = parseInt(JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).version.split(".")[1], 10);
+  const sw = fs.readFileSync(path.join(root, "public", "sw.js"), "utf8");
+  const html = fs.readFileSync(path.join(root, "index.html"), "utf8");
+  A("the stamps move together", sw.includes(`var CACHE = "tally-v${minor}";`) && html.includes(`register('./sw.js?v=${minor}')`) && TALLY_BUILD === "t" + (minor - 2),
+    `minor=${minor} build=${TALLY_BUILD}`);
+}
+const badText = [...seenText].filter((t) => BAD.test(t));
+A("no ! or dash in any rendered text", badText.length === 0, badText.slice(0, 5).join(" | "));
+const palBad = PALS.flatMap((p) => [...p.cheers, p.win]).filter((s) => BAD.test(s));
+A("pal lines carry no ! or dash", palBad.length === 0, palBad.slice(0, 3).join(" | "));
+A("rendered text was recorded", seenText.size > 40, "texts=" + seenText.size);
 
 rmSync(entry, { force: true }); rmSync(outfile, { force: true });
 console.log("\n" + results.join("\n"));

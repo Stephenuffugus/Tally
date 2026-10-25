@@ -13,7 +13,7 @@ import {
    ========================================================================== */
 
 import { OPS, evalExpr, sigOf, genPuzzle, shuffleArr, levelOpts, todayKey, isoDay, daysBetween } from "./engine.js";
-import { SKINS, skinById, PALS, palById, WORLDS, WORLD_SIZE, worldOfLevel, ECONOMY } from "./config.js";
+import { SKINS, skinById, PALS, palById, WORLDS, WORLD_SIZE, worldOfLevel, ECONOMY, TALLY_BUILD } from "./config.js";
 import { DEFAULT_META, loadMeta, saveMeta } from "./storage.js";
 import { createWallet, STREAK_MILESTONES } from "./wallet.js";
 import { sfx, buzz } from "./audio.js";
@@ -32,6 +32,11 @@ export default function App() {
     try { return typeof window !== "undefined" && !window.SWS_EMBED && !(window.TallyStandalone && window.TallyStandalone()); }
     catch (e) { return false; }
   });
+  const [viewH, setViewH] = useState(() => { try { return window.innerHeight || 800; } catch (e) { return 800; } });
+  useEffect(() => {
+    const r = () => setViewH(window.innerHeight || 800);
+    window.addEventListener("resize", r); return () => window.removeEventListener("resize", r);
+  }, []);
   const [toast, setToast] = useState(null);
   const [particles, setParticles] = useState([]);
   const [winData, setWinData] = useState(null);
@@ -202,7 +207,7 @@ export default function App() {
     const sig = sigOf(nums, ops);
     setBanking(true);
     if (foundSigs.includes(sig)) {
-      showToast("Already found that one", "info");
+      showToast("You already found this way", "info");
       sfx.op(sound);
       setTimeout(() => { setBuilder([]); setBanking(false); }, 260);
       return;
@@ -220,7 +225,7 @@ export default function App() {
       sfx.good(sound);
       buzz([20, 60, 30], hapt);
       if (screen === "play") markEarn("level_clear", "level_clear:" + campaignLevel, { level: campaignLevel });
-      showToast("All required found — keep going or tap Next!", "good");
+      showToast("Ready to finish. Keep exploring for bonus finds", "good");
     } else {
       sfx.good(sound);
       buzz(15, hapt);
@@ -285,8 +290,8 @@ export default function App() {
       dailyMsg = alreadyToday
         ? "Replayed today's daily"
         : (gap > 1 && meta.freezes > 0)
-          ? "Streak Freeze saved your streak! +1 💎"
-          : "Daily done — streak kept! +1 💎";
+          ? "A freeze kept your streak. +1 💎"
+          : "Daily done, streak kept. +1 💎";
     }
     const coinGain = addCoins(extra);
 
@@ -311,7 +316,8 @@ export default function App() {
     buzz([25, 70, 25, 70, 50], hapt);
     burst();
     palCheer("win");
-    setWinData({ stars, star1, star2, star3, bonusCount, total: p.total, found: nextFound.length, required: p.required, coinGain, target: p.target, mode: screen, dailyMsg });
+    const paid = nextFound.filter((sig) => !(reveals[p.id] || []).includes(sig)).length;   // banked, not revealed by a hint
+    setWinData({ stars, star1, star2, star3, bonusCount, total: p.total, found: nextFound.length, required: p.required, coinGain, target: p.target, mode: screen, dailyMsg, hasClean: !!p.hasClean, boost: boostActive, paid, level: campaignLevel });
     setOverlay("win");
   }
 
@@ -356,8 +362,8 @@ export default function App() {
     const nf = [...foundSigs, pick.sig];
     setFinds((f) => ({ ...f, [pid]: nf }));
     setReveals((r) => ({ ...r, [pid]: [...(r[pid] || []), pick.sig] }));
-    showToast(`Hint revealed one solution (−${cost} 🪙)`, "info");
-    if (nf.length >= activePuzzle.required) setTimeout(() => showToast("All required found — tap Next!", "good"), 1000);
+    showToast(`Hint shows one way. ${cost} 🪙 spent`, "info");
+    if (nf.length >= activePuzzle.required) setTimeout(() => showToast("Ready to finish. Tap Next", "good"), 1000);
   }
 
   function buySkin(skin) {
@@ -370,11 +376,11 @@ export default function App() {
       gems: skin.currency === "gems" ? m.gems - skin.price : m.gems,
       owned: [...m.owned, skin.id], skin: skin.id,
     }));
-    sfx.buy(sound); showToast(`${skin.name} unlocked & equipped!`, "good");
+    sfx.buy(sound); showToast(`${skin.name} unlocked and equipped`, "good");
     markEarn("skin_unlock", "skin_unlock:" + skin.id, { id: skin.id });
   }
   function buyPal(p) {
-    if (meta.ownedPals.includes(p.id)) { setMeta((m) => ({ ...m, pal: p.id })); showToast(`${p.name} is cheering you on!`, "good"); palCheer("solve"); return; }
+    if (meta.ownedPals.includes(p.id)) { setMeta((m) => ({ ...m, pal: p.id })); showToast(`${p.name} is cheering with you`, "good"); palCheer("solve"); return; }
     const bal = p.currency === "gems" ? meta.gems : meta.coins;
     if (bal < p.price) { showToast(`Need more ${p.currency}`, "warn"); return; }
     setMeta((m) => ({
@@ -383,7 +389,7 @@ export default function App() {
       gems: p.currency === "gems" ? m.gems - p.price : m.gems,
       ownedPals: [...m.ownedPals, p.id], pal: p.id,
     }));
-    sfx.buy(sound); showToast(`${p.name} joined your team!`, "good");
+    sfx.buy(sound); showToast(`${p.name} joined your team`, "good");
     markEarn("pal_unlock", "pal_unlock:" + p.id, { id: p.id });
     palCheer("solve");
   }
@@ -398,15 +404,15 @@ export default function App() {
     const cost = ECONOMY.BOOST_COST_GEMS;
     if (meta.gems < cost) { showToast(`Need ${cost} 💎`, "warn"); return; }
     setMeta((m) => ({ ...m, gems: m.gems - cost, boostUntil: Date.now() + ECONOMY.BOOST_HOURS * 3600 * 1000 }));
-    sfx.buy(sound); showToast("Double Coins active for 24h!", "good");
+    sfx.buy(sound); showToast("Double Coins active for 24 hours", "good");
   }
 
   function shareResult() {
     if (!winData) return;
     const starStr = "★".repeat(winData.stars) + "☆".repeat(3 - winData.stars);
-    const label = winData.mode === "daily" ? `Daily #${todayKey()}` : `Level ${meta.level}`;
-    const txt = `Tally — ${label}\n🎯 ${winData.target}   ${starStr}\n🧩 ${winData.found}/${winData.total} solutions found\nStreak 🔥 ${meta.streak}`;
-    try { navigator.clipboard?.writeText(txt); showToast("Result copied!", "good"); }
+    const label = winData.mode === "daily" ? `Daily #${todayKey()}` : `Level ${winData.level}`;
+    const txt = `Tally, ${label}\n🎯 ${winData.target}   ${starStr}\n🧩 ${winData.found}/${winData.total} solutions found\nStreak 🔥 ${meta.streak}`;
+    try { navigator.clipboard?.writeText(txt); showToast("Result copied", "good"); }
     catch (e) { showToast("Copy not available here", "warn"); }
   }
 
@@ -422,15 +428,17 @@ export default function App() {
     );
   }
 
+  const onBoardScreen = screen === "play" || screen === "daily";
+  const barShown = showInstall && (!onBoardScreen || viewH >= 740);
   return (
-    <div className={"mv-root" + (motion ? "" : " mv-nomotion")} style={rootStyle}>
+    <div className={"mv-root" + (motion ? "" : " mv-nomotion") + (barShown ? " mv-hasbar" : "")} style={rootStyle}>
       <StyleTag />
 
       {/* top bar */}
       <header className="mv-top">
         <div className="mv-brand"><span>Ta</span><b>lly</b></div>
         <div className="mv-wallet">
-          {boostActive && <span className="mv-chip mv-boost" title="Double coins active"><Zap size={13} /> 2×</span>}
+          {boostActive && <span className="mv-chip mv-boost" title="Double coins active" aria-label="Double coins active"><Zap size={13} /><span className="mv-chip-x"> 2×</span></span>}
           {meta.streak > 0 && <span className="mv-chip" title="Daily streak"><Flame size={14} className="mv-flame" /> {meta.streak}</span>}
           <span className="mv-chip"><Coins size={14} /> {meta.coins}</span>
           <span className="mv-chip"><Gem size={14} /> {meta.gems}</span>
@@ -492,11 +500,11 @@ export default function App() {
       {toast && <div className={"mv-toast mv-toast-" + toast.kind} key={toast.id} role="status" aria-live="polite">{toast.msg}</div>}
 
       {/* add-to-home-screen bar — fixed above the nav so it never squeezes the board */}
-      {showInstall && (
-        <div style={{ position: "fixed", left: 0, right: 0, bottom: "calc(66px + env(safe-area-inset-bottom,0px))", display: "flex", justifyContent: "center", zIndex: 40, pointerEvents: "none", padding: "0 10px" }}>
-          <div style={{ pointerEvents: "auto", display: "flex", alignItems: "center", gap: 8, background: "#2c3e57", color: "#f2e4cf", borderRadius: 14, boxShadow: "0 6px 22px rgba(0,0,0,.28)", padding: "6px 6px 6px 15px", maxWidth: 420, width: "100%" }}>
-            <button onClick={() => { try { window.TallyInstall && window.TallyInstall(); } catch (e) {} }} style={{ flex: 1, border: "none", background: "none", font: "inherit", fontWeight: 700, fontSize: 15, cursor: "pointer", color: "inherit", minHeight: 44, textAlign: "left" }}>📲 Add to Home Screen</button>
-            <button onClick={() => setShowInstall(false)} aria-label="Dismiss" style={{ border: "none", background: "rgba(255,255,255,.12)", borderRadius: 9, width: 36, height: 36, cursor: "pointer", color: "inherit", fontSize: 15 }}>✕</button>
+      {barShown && (
+        <div className="mv-installbar" style={{ position: "fixed", left: 0, right: 0, bottom: "calc(66px + env(safe-area-inset-bottom,0px))", display: "flex", justifyContent: "center", zIndex: 40, pointerEvents: "none", padding: "0 10px" }}>
+          <div style={{ pointerEvents: "auto", display: "flex", alignItems: "center", gap: 8, background: "#2c3e57", color: "#f2e4cf", borderRadius: 14, boxShadow: "0 6px 22px rgba(0,0,0,.28)", padding: "0 0 0 15px", maxWidth: 420, width: "100%" }}>
+            <button onClick={() => { try { window.TallyInstall && window.TallyInstall(); } catch (e) {} }} style={{ flex: 1, border: "none", background: "none", font: "inherit", fontWeight: 700, fontSize: 15, cursor: "pointer", color: "inherit", minHeight: 48, textAlign: "left" }}>📲 Add to Home Screen</button>
+            <button onClick={() => setShowInstall(false)} aria-label="Dismiss" style={{ border: "none", background: "rgba(255,255,255,.12)", borderRadius: 14, width: 48, height: 48, flexShrink: 0, cursor: "pointer", color: "inherit", fontSize: 15 }}>✕</button>
           </div>
         </div>
       )}
@@ -621,14 +629,14 @@ function Board(props) {
         </div>
         <div className="mv-builder-total">
           <span className="mv-eq-sign">=</span>
-          <b>{showEq ? (liveVal ?? "?") : "—"}</b>
+          <b>{showEq ? (liveVal ?? "?") : "?"}</b>
         </div>
       </div>
 
       {/* operators */}
       <div className="mv-ops">
         {OPS.map((op) => (
-          <button key={op} className="mv-op" onClick={() => onOp(op)} aria-label={"operator " + op}>{op === "-" ? "−" : op}</button>
+          <button key={op} className="mv-op" onClick={() => onOp(op)} aria-label={OP_NAMES[op] || op}>{op === "-" ? "−" : op}</button>
         ))}
       </div>
 
@@ -653,7 +661,7 @@ function Board(props) {
         {cleared ? (
           <button className="mv-ctrl next" onClick={onNext} aria-label="Finish and see results">Next <ChevronRight size={16} /></button>
         ) : (
-          <button className="mv-ctrl hint" onClick={onHint} aria-label="Buy a hint for 25 coins"><Lightbulb size={16} /> Hint <em>{ECONOMY.HINT_COST}</em></button>
+          <button className="mv-ctrl hint" onClick={onHint} aria-label={"Buy a hint for " + ECONOMY.HINT_COST + " coins"}><Lightbulb size={16} /> Hint <em>{ECONOMY.HINT_COST}</em></button>
         )}
       </div>
 
@@ -668,6 +676,7 @@ function Board(props) {
   );
 }
 
+const OP_NAMES = { "+": "plus", "-": "minus", "×": "times", "÷": "divide" };
 function exprText(tokens) {
   return tokens.map((t) => (t === "-" ? "−" : t)).join(" ");
 }
@@ -685,7 +694,7 @@ function Shop({ meta, boostActive, onBuySkin, onEquipSkin, onPreviewSkin, onBuyP
 
       {tab === "pals" && (<>
         <h2 className="mv-page-title">Pals</h2>
-        <p className="mv-page-sub">Cheerful friends who root you on. Collect them all — cosmetic only, style never advantage.</p>
+        <p className="mv-page-sub">Cheerful friends who cheer with you. Collect them all. Cosmetic only, style never advantage.</p>
         <div className="mv-skingrid">
           {PALS.map((p) => {
             const owned = meta.ownedPals.includes(p.id);
@@ -702,7 +711,7 @@ function Shop({ meta, boostActive, onBuySkin, onEquipSkin, onPreviewSkin, onBuyP
                 </div>
                 <button className={"mv-skinbtn" + (equipped ? " equipped" : owned ? " owned" : "")}
                   onClick={(e) => { e.stopPropagation(); owned ? onEquipPal(p.id) : onBuyPal(p); }}>
-                  {equipped ? "Cheering!" : owned ? "Equip" : (
+                  {equipped ? "Cheering with you" : owned ? "Equip" : (
                     <>{p.currency === "gems" ? <Gem size={12} /> : <Coins size={12} />} {p.price === 0 ? "Free" : p.price}</>
                   )}
                 </button>
@@ -714,7 +723,7 @@ function Shop({ meta, boostActive, onBuySkin, onEquipSkin, onPreviewSkin, onBuyP
 
       {tab === "skins" && (<>
         <h2 className="mv-page-title">Skins</h2>
-        <p className="mv-page-sub">Cosmetic only — every skin plays identically. Style, never advantage.</p>
+        <p className="mv-page-sub">Cosmetic only. Every skin plays the same. Style, never advantage.</p>
         <div className="mv-skingrid">
           {SKINS.map((s) => {
             const owned = meta.owned.includes(s.id);
@@ -744,7 +753,7 @@ function Shop({ meta, boostActive, onBuySkin, onEquipSkin, onPreviewSkin, onBuyP
 
       {tab === "boosts" && (<>
       <h2 className="mv-page-title">Boosts</h2>
-      <p className="mv-page-sub">Handy helpers — convenience only, never an unfair edge.</p>
+      <p className="mv-page-sub">Handy helpers. Convenience only, never an unfair edge.</p>
       <div className="mv-boostgrid">
         <div className="mv-boostcard">
           <div className="mv-boosticon" style={{ background: "rgba(255,180,60,.16)" }}><Coins size={22} /></div>
@@ -758,7 +767,7 @@ function Shop({ meta, boostActive, onBuySkin, onEquipSkin, onPreviewSkin, onBuyP
           <div className="mv-boosticon" style={{ background: "rgba(90,200,255,.16)" }}><Flame size={22} /></div>
           <div className="mv-boostinfo">
             <div className="mv-skinname">Streak Freeze ×{meta.freezes}</div>
-            <div className="mv-skinvibe">Auto-saves your streak if you miss a day</div>
+            <div className="mv-skinvibe">Saves your streak if you miss a day</div>
           </div>
           <button className="mv-skinbtn" onClick={onFreeze}><Gem size={12} /> {ECONOMY.FREEZE_COST_GEMS}</button>
         </div>
@@ -766,7 +775,7 @@ function Shop({ meta, boostActive, onBuySkin, onEquipSkin, onPreviewSkin, onBuyP
           <div className="mv-boosticon" style={{ background: "rgba(160,140,255,.16)" }}><Trophy size={22} /></div>
           <div className="mv-boostinfo">
             <div className="mv-skinname">Zen Pass · Season 1</div>
-            <div className="mv-skinvibe">Seasonal reward track — coming soon</div>
+            <div className="mv-skinvibe">Seasonal reward track, coming soon</div>
           </div>
           <button className="mv-skinbtn" disabled>Soon</button>
         </div>
@@ -867,7 +876,7 @@ function WinOverlay({ data, onNext, onShare, mode }) {
     <div className="mv-scrim">
       <div className="mv-modal mv-win">
         <div className="mv-win-glow" />
-        <div className="mv-win-title">{mode === "daily" ? "Daily Complete" : "Solved!"}</div>
+        <div className="mv-win-title">{mode === "daily" ? "Daily complete" : "Round complete"}</div>
         <div className="mv-stars">
           {[0, 1, 2].map((i) => (
             <Star key={i} size={42} className={"mv-star" + (i < data.stars ? " lit" : "")}
@@ -876,13 +885,14 @@ function WinOverlay({ data, onNext, onShare, mode }) {
         </div>
         <div className="mv-star-conds">
           <Cond ok={data.star1} label="Reach the target" />
-          <Cond ok={data.star2} label="Find a two-number solution" />
-          <Cond ok={data.star3} label="Discover 2+ bonus solutions" />
+          <Cond ok={data.star2} label={data.hasClean ? "Find a two number solution" : "Find one extra way"} />
+          <Cond ok={data.star3} label={data.total - data.required >= 2 ? "Find two bonus ways" : "Find every way"} />
         </div>
         <div className="mv-win-stat">
           <span><b>{data.found}</b>/{data.total} found</span>
-          <span className="mv-win-coins"><Coins size={15} /> +{data.coinGain}</span>
+          <span className="mv-win-coins">Stars <Coins size={15} /> +{data.coinGain}</span>
         </div>
+        {data.paid > 0 && <div className="mv-win-paid">Paid at the bank: {ECONOMY.SOLVE_COINS * (data.boost ? 2 : 1)} a way, {ECONOMY.BONUS_COINS * (data.boost ? 2 : 1)} a bonus</div>}
         {data.dailyMsg && <div className="mv-daily-note"><Flame size={14} className="mv-flame" /> {data.dailyMsg}</div>}
         <div className="mv-win-actions">
           <button className="mv-btn ghost" onClick={onShare}><Share2 size={16} /> Share</button>
@@ -903,14 +913,14 @@ function Cond({ ok, label }) {
 function HowToOverlay({ onClose }) {
   const steps = [
     { n: "1", t: "Build an equation", d: "Tap a number, then an operator, then a number… × and ÷ apply before + and −." },
-    { n: "2", t: "Hit the target", d: "The moment your equation equals it, it banks itself — no submit button." },
-    { n: "3", t: "Find every way", d: "Fill the dots to clear the level. Extra finds pay bonus coins." },
-    { n: "4", t: "Collect Pals", d: "Spend coins in the Shop on cheerful friends who root you on!" },
+    { n: "2", t: "Hit the target", d: "The moment your equation equals it, it banks itself. No submit button." },
+    { n: "3", t: "Fill the dots", d: "Find the required ways to finish. Extra finds earn bonus coins." },
+    { n: "4", t: "Collect Pals", d: "Spend coins in the Shop on cheerful friends who cheer with you." },
   ];
   return (
     <div className="mv-scrim" onClick={onClose}>
       <div className="mv-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="mv-modal-head"><h3>How to play</h3><button className="mv-icobtn" onClick={onClose} aria-label="Close"><X size={18} /></button></div>
+        <div className="mv-modal-head"><h3>How to play</h3><button className="mv-icobtn" onClick={onClose} aria-label="Close how to play"><X size={18} /></button></div>
         <div className="mv-howto">
           {steps.map((s) => (
             <div key={s.n} className="mv-howstep">
@@ -919,7 +929,7 @@ function HowToOverlay({ onClose }) {
             </div>
           ))}
         </div>
-        <div className="mv-howkeys">Keyboard: <b>1–5</b> tiles · <b>+ − × ÷</b> ops · <b>⌫</b> undo · <b>Esc</b> clear · <b>S</b> shuffle · <b>Enter</b> next</div>
+        <div className="mv-howkeys">Keyboard: <b>1 to 5</b> tiles · <b>+ − × ÷</b> ops · <b>⌫</b> undo · <b>Esc</b> clear · <b>S</b> shuffle · <b>Enter</b> next</div>
         <button className="mv-btn primary" style={{ width: "100%" }} onClick={onClose}>Let's play</button>
       </div>
     </div>
@@ -931,7 +941,7 @@ function SettingsOverlay({ meta, onClose, onToggleSound, onToggleMotion, onToggl
   return (
     <div className="mv-scrim" onClick={onClose}>
       <div className="mv-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="mv-modal-head"><h3>Settings</h3><button className="mv-icobtn" onClick={onClose}><X size={18} /></button></div>
+        <div className="mv-modal-head"><h3>Settings</h3><button className="mv-icobtn" onClick={onClose} aria-label="Close settings"><X size={18} /></button></div>
         <Row label="Sound" on={meta.sound} onClick={onToggleSound} icon={meta.sound ? <Volume2 size={18} /> : <VolumeX size={18} />} />
         <Row label="Animations" on={meta.motion} onClick={onToggleMotion} icon={<Sparkles size={18} />} />
         <Row label="Haptics" on={meta.haptics} onClick={onToggleHaptics} icon={<Vibrate size={18} />} />
@@ -953,6 +963,7 @@ function SettingsOverlay({ meta, onClose, onToggleSound, onToggleMotion, onToggl
           <LogOut size={16} /> All Sky Wolf games
         </button>
         <div className="mv-set-note">Tally saves your progress on this device automatically.</div>
+        <div className="mv-set-build">Build {TALLY_BUILD}</div>
         {!confirm ? (
           <button className="mv-btn danger" onClick={() => setConfirm(true)}>Reset all progress</button>
         ) : (
@@ -983,7 +994,7 @@ function SkinPreview({ skin, owned, meta, onBuy, onClose }) {
     <div className="mv-scrim" onClick={onClose}>
       <div className="mv-modal mv-preview" onClick={(e) => e.stopPropagation()}
         style={{ background: `linear-gradient(160deg, ${skin.v.surf}, ${skin.v.bg})` }}>
-        <button className="mv-icobtn mv-preview-x" onClick={onClose} style={{ color: skin.v.text }}><X size={18} /></button>
+        <button className="mv-icobtn mv-preview-x" onClick={onClose} style={{ color: skin.v.text }} aria-label="Close skin preview"><X size={18} /></button>
         <div className="mv-preview-beacon" style={{ background: skin.v.target, color: skin.v.ttext, boxShadow: `0 0 40px rgba(${skin.v.tg},.7)` }}>{20}</div>
         <div className="mv-preview-tiles">
           {[3, 8, 12, 5].map((x, i) => (
@@ -1010,13 +1021,13 @@ function PalPreview({ pal, owned, meta, onBuy, onClose }) {
     <div className="mv-scrim" onClick={onClose}>
       <div className="mv-modal mv-preview" onClick={(e) => e.stopPropagation()}
         style={{ background: `radial-gradient(circle at 50% 20%, ${pal.color}33, var(--surf))` }}>
-        <button className="mv-icobtn mv-preview-x" onClick={onClose}><X size={18} /></button>
+        <button className="mv-icobtn mv-preview-x" onClick={onClose} aria-label="Close pal preview"><X size={18} /></button>
         <div className="mv-preview-pal" style={{ "--pc": pal.color }}>{pal.face}</div>
         <div className="mv-preview-name">{pal.name}</div>
         <div className="mv-preview-vibe" style={{ color: "var(--muted)" }}>{pal.vibe}</div>
         <div className="mv-preview-say">“{pal.cheers[0]}”</div>
         <button className="mv-btn primary mv-preview-buy" onClick={() => onBuy(pal)}>
-          {equipped ? "Cheering for you!" : owned ? "Equip" : (
+          {equipped ? "Cheering with you" : owned ? "Equip" : (
             <>Unlock · {pal.price === 0 ? "Free" : pal.price} {pal.currency === "gems" ? "💎" : pal.price === 0 ? "" : "🪙"}</>
           )}
         </button>
@@ -1082,15 +1093,18 @@ function StyleTag() {
     .mv-chip svg { opacity: .95; }
     .mv-flame { color: #ff8a3d; }
     .mv-boost { background: color-mix(in srgb, var(--target) 22%, var(--surf)); color: var(--target); border-color: color-mix(in srgb, var(--target) 45%, transparent); }
-    .mv-icobtn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px;
+    /* a 48 px touch box that still draws the 40 px disc (the background stops at the content box) */
+    .mv-icobtn { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; flex-shrink: 0; padding: 4px; margin: -4px 0; border-radius: 16px;
       border: none; border-radius: 12px; background: color-mix(in srgb, var(--surf) 78%, transparent); color: var(--text); cursor: pointer;
-      transition: transform .08s, background .15s; }
+      transition: transform .08s, background .15s; background-clip: content-box; }
     .mv-icobtn:active { transform: scale(.92); }
-    /* on very narrow phones, drop chip padding + hide labels so the bar never wraps */
-    @media (max-width: 380px) {
+    /* on phones up to 440 wide, tighter chips so a streak, Double Coins, five digit coins and both buttons fit */
+    @media (max-width: 440px) {
       .mv-top { padding-left: 10px; padding-right: 10px; }
-      .mv-chip { padding: 6px 7px; font-size: 12px; }
+      .mv-chip { padding: 6px 6px; font-size: 12px; gap: 3px; }
       .mv-brand { font-size: 18px; }
+      .mv-wallet { gap: 3px; }
+      .mv-boost .mv-chip-x { display: none; }
     }
 
     .mv-main { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
@@ -1098,12 +1112,12 @@ function StyleTag() {
     /* board — a column that fills all space between the top bar and the nav */
     .mv-board { position: relative; flex: 1; min-height: 0; padding: 2px 16px 8px; display: flex; flex-direction: column; align-items: center; }
     .mv-mode-row { width: 100%; display: flex; justify-content: space-between; align-items: center; margin: 2px 0; min-height: 20px; }
-    .mv-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--acc); }
+    .mv-eyebrow { font-size: 11.5px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--acc); }
     .mv-progress { display: inline-flex; align-items: center; gap: 6px; }
     .mv-pdot { width: 9px; height: 9px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 40%, transparent);
       border: 1px solid color-mix(in srgb, var(--line) 70%, transparent); transition: all .3s; }
     .mv-pdot.on { background: var(--good); border-color: transparent; box-shadow: 0 0 8px color-mix(in srgb, var(--good) 60%, transparent); }
-    .mv-pbonus { display: inline-flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 800; color: var(--target);
+    .mv-pbonus { display: inline-flex; align-items: center; gap: 2px; font-size: 11.5px; font-weight: 800; color: var(--target);
       margin-left: 2px; }
 
     /* target beacon — the one bold "bead" of the board */
@@ -1118,7 +1132,7 @@ function StyleTag() {
       animation: mv-spin 9s linear infinite; }
     .mv-beacon::after { content:""; position: absolute; top: 15%; left: 24%; width: 34%; height: 26%; border-radius: 50%;
       background: radial-gradient(circle at 40% 40%, rgba(255,255,255,.75), transparent 70%); pointer-events: none; }
-    .mv-beacon-label { font-size: 9px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; opacity: .7; margin-top: -1px; }
+    .mv-beacon-label { font-size: 11.5px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; opacity: .7; margin-top: -1px; }
     .mv-beacon-num { font-size: clamp(35px, 7.2vh, 48px); font-weight: 800; line-height: .92; letter-spacing: -1px; text-shadow: 0 1px 2px rgba(0,0,0,.12); }
     @keyframes mv-breathe { 0%,100% { transform: translateY(0) scale(1);} 50% { transform: translateY(-3px) scale(1.03);} }
     @keyframes mv-spin { to { transform: rotate(360deg);} }
@@ -1186,7 +1200,7 @@ function StyleTag() {
     .mv-tile:active { transform: translate(-50%, -50%) scale(.9); }
     .mv-tile.used { opacity: .24; filter: grayscale(.5); pointer-events: none; transform: translate(-50%, -50%) scale(.78); }
     .mv-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      width: calc(var(--cd) * .22); height: calc(var(--cd) * .22); min-width: 44px; min-height: 44px;
+      width: calc(var(--cd) * .22); height: calc(var(--cd) * .22); min-width: 48px; min-height: 48px;
       border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--acc) 45%, transparent); cursor: pointer;
       background: color-mix(in srgb, var(--surf) 88%, transparent); color: var(--acc);
       display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 10px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.2); }
@@ -1200,7 +1214,7 @@ function StyleTag() {
     .mv-ctrl:active { transform: scale(.96); }
     .mv-ctrl:disabled { opacity: .4; cursor: default; }
     .mv-ctrl.hint { background: color-mix(in srgb, var(--target) 22%, var(--surf)); color: var(--text); }
-    .mv-ctrl.hint em { font-style: normal; font-size: 11px; opacity: .8; display: inline-flex; align-items: center; gap: 2px; }
+    .mv-ctrl.hint em { font-style: normal; font-size: 11.5px; opacity: .8; display: inline-flex; align-items: center; gap: 2px; }
     .mv-ctrl.next { flex: 1.3; background: linear-gradient(160deg, color-mix(in srgb, var(--good) 90%, #fff 12%), var(--good));
       color: #06231a; font-weight: 800; box-shadow: 0 3px 0 rgba(0,0,0,.24), 0 0 20px color-mix(in srgb, var(--good) 45%, transparent);
       animation: mv-pulse 1.5s ease-in-out infinite; }
@@ -1208,6 +1222,9 @@ function StyleTag() {
 
     /* pages */
     .mv-page { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 16px 20px; -webkit-overflow-scrolling: touch; }
+    .mv-hasbar .mv-page { padding-bottom: 76px; }
+    .mv-hasbar .mv-board { padding-bottom: 66px; }
+    .mv-hasbar .mv-pal { bottom: 142px; }
     .mv-page-title { font-size: 20px; font-weight: 800; letter-spacing: -.4px; margin: 6px 0 2px; }
     .mv-page-sub { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
 
@@ -1222,7 +1239,7 @@ function StyleTag() {
     .mv-skinmeta { padding: 8px 4px 4px; }
     .mv-skinname { font-size: 14.5px; font-weight: 800; }
     .mv-skinvibe { font-size: 11.5px; color: var(--muted); margin-top: 1px; }
-    .mv-skinbtn { width: 100%; margin-top: 8px; padding: 8px; border-radius: 10px; border: none; cursor: pointer;
+    .mv-skinbtn { width: 100%; min-height: 48px; margin-top: 8px; padding: 8px; border-radius: 10px; border: none; cursor: pointer;
       font-size: 13px; font-weight: 800; background: var(--acc); color: #071a2e; display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
     .mv-skinbtn.owned { background: color-mix(in srgb, var(--surf2) 90%, transparent); color: var(--text); }
     .mv-skinbtn.equipped { background: color-mix(in srgb, var(--good) 30%, var(--surf)); color: var(--good); }
@@ -1257,7 +1274,7 @@ function StyleTag() {
     .mv-navbtn:active { transform: scale(.95); }
     .mv-navico { position: relative; }
     .mv-navbadge { position: absolute; top: -2px; right: -4px; width: 8px; height: 8px; border-radius: 50%; background: var(--target); box-shadow: 0 0 8px var(--target); }
-    .mv-navlbl { font-size: 11px; font-weight: 700; }
+    .mv-navlbl { font-size: 11.5px; font-weight: 700; }
 
     /* toast */
     .mv-toast { position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); z-index: 60; pointer-events: none;
@@ -1308,7 +1325,7 @@ function StyleTag() {
       color: #ff8a3d; background: rgba(255,138,61,.14); padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; width: 100%; }
     .mv-win-actions { display: flex; gap: 8px; }
 
-    .mv-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 13px 14px;
+    .mv-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 13px 14px; min-height: 48px;
       border-radius: 13px; border: none; cursor: pointer; font-size: 14.5px; font-weight: 800; transition: transform .08s; }
     .mv-btn:active { transform: scale(.97); }
     .mv-btn.primary { background: linear-gradient(160deg, color-mix(in srgb, var(--acc) 88%, #fff 12%), var(--acc)); color: #071a2e; }
@@ -1326,6 +1343,8 @@ function StyleTag() {
     .mv-knob { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: transform .2s; }
     .mv-switch.on .mv-knob { transform: translateX(18px); }
     .mv-set-note { font-size: 12px; color: var(--muted); margin: 12px 0; line-height: 1.5; }
+    .mv-set-build { font-size: 11.5px; color: var(--muted); margin: -6px 0 12px; opacity: .8; }
+    .mv-win-paid { font-size: 12px; color: var(--muted); text-align: center; margin: -4px 0 10px; }
     .mv-confirm { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; align-items: center; font-size: 14px; font-weight: 700; }
     .mv-confirm > div { display: flex; gap: 8px; width: 100%; }
 
@@ -1342,7 +1361,7 @@ function StyleTag() {
 
     /* preview */
     .mv-preview { text-align: center; padding: 28px 20px; }
-    .mv-preview-x { position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,.12) !important; }
+    .mv-preview-x { position: absolute; top: 12px; right: 12px; z-index: 2; background-color: rgba(255,255,255,.12) !important; }
     .mv-preview-beacon { width: 90px; height: 90px; margin: 6px auto 18px; border-radius: 36% 64% 60% 40%;
       display: flex; align-items: center; justify-content: center; font-size: 38px; font-weight: 800; }
     .mv-preview-tiles { display: flex; justify-content: center; gap: 9px; margin-bottom: 16px; }
@@ -1355,7 +1374,8 @@ function StyleTag() {
     .mv-preview-say { font-size: 15px; font-weight: 700; color: var(--text); margin: -6px 0 16px; font-style: italic; }
 
     /* eyebrow-as-button (opens the map) */
-    .mv-eyebrow-btn { background: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 2px 0; }
+    /* a 48 px tall touch box around a 16 px line: the negative margin keeps the row's height (the play screen never scrolls) */
+    .mv-eyebrow-btn { background: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0 10px 0 0; min-height: 48px; margin: -4px 0 -28px; position: relative; z-index: 1; }
     .mv-eyebrow-btn svg { opacity: .85; }
     .mv-eyebrow-btn:active { transform: scale(.96); }
 
@@ -1376,7 +1396,7 @@ function StyleTag() {
 
     /* shop tabs */
     .mv-shoptabs { display: flex; gap: 6px; margin: 4px 0 10px; }
-    .mv-shoptab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 9px 6px;
+    .mv-shoptab { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 9px 6px; min-height: 48px;
       border-radius: 12px; border: none; cursor: pointer; font-size: 13px; font-weight: 800;
       background: color-mix(in srgb, var(--surf) 55%, transparent); color: var(--muted); transition: all .15s; }
     .mv-shoptab.on { background: color-mix(in srgb, var(--acc) 26%, var(--surf)); color: var(--text); }
@@ -1403,7 +1423,7 @@ function StyleTag() {
     .mv-lvlnode.current { border-color: var(--acc); box-shadow: 0 0 0 2px color-mix(in srgb, var(--acc) 45%, transparent); }
     .mv-lvlnode.locked { opacity: .45; cursor: default; color: var(--muted); }
     .mv-lvlnum { font-size: 19px; font-weight: 800; letter-spacing: -.5px; }
-    .mv-lvlstars { display: flex; gap: 1px; font-size: 9px; line-height: 1; }
+    .mv-lvlstars { display: flex; gap: 1px; font-size: 11.5px; line-height: 1; }
     .mv-lvlstar { color: color-mix(in srgb, var(--muted) 45%, transparent); }
     .mv-lvlstar.lit { color: var(--target); }
 
