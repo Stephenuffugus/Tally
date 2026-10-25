@@ -40,7 +40,7 @@
     (function(){
       try{
         if('serviceWorker' in navigator && /^https?:/.test(location.protocol)){
-          window.addEventListener('load',function(){ navigator.serviceWorker.register('./sw.js?v=2')['catch'](function(){}); });
+          window.addEventListener('load',function(){ navigator.serviceWorker.register('./sw.js?v=3')['catch'](function(){}); });
         }
       }catch(e){}
       var deferred=null;

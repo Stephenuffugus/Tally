@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect } from "react";
 import {
   Coins, Gem, Flame, Settings, X, Star, Lock, Check, Undo2, Trash2, Shuffle,
   Lightbulb, Home, Calendar, Store, BarChart3, ChevronRight, Volume2,
@@ -14,6 +14,8 @@ import {
 
 import { OPS, evalExpr, sigOf, genPuzzle, shuffleArr, levelOpts, todayKey, isoDay, daysBetween } from "./engine.js";
 import { SKINS, skinById, PALS, palById, WORLDS, WORLD_SIZE, worldOfLevel, ECONOMY, TALLY_BUILD } from "./config.js";
+import { createPalAnimator, palMaySpeak } from "./palAnim.js";
+import ART from "./art-t1.json";   // written by tools/cut_art.py with the art in public/art/t1
 import { DEFAULT_META, loadMeta, saveMeta } from "./storage.js";
 import { createWallet, STREAK_MILESTONES } from "./wallet.js";
 import { sfx, buzz } from "./audio.js";
@@ -50,6 +52,8 @@ export default function App() {
   const [finds, setFinds] = useState({});     // pid -> [sig]
   const [reveals, setReveals] = useState({}); // pid -> [sig]  (hint reveals)
   const [palSay, setPalSay] = useState(null); // {text, id} — companion speech bubble
+  const [palEvent, setPalEvent] = useState(null); // {kind, id}: the painted pal cheers or wins
+  const palSaidAt = useRef(null);
   const toastTimer = useRef(null);
   const palTimer = useRef(null);
   const comboRef = useRef({ n: 0, t: 0 });   // rapid-solve chain
@@ -88,6 +92,10 @@ export default function App() {
   const palCheer = useCallback((kind) => {
     const p = palById(meta.pal);
     if (!p) return;
+    setPalEvent({ kind: kind === "win" ? "win" : "solve", id: Math.random() });
+    const now = Date.now();
+    if (!palMaySpeak(kind, palSaidAt.current, now)) return;   // the bubble speaks at most once per 6 s
+    palSaidAt.current = now;
     const text = kind === "win" ? p.win : p.cheers[Math.floor(Math.random() * p.cheers.length)];
     setPalSay({ text, id: Math.random() });
     if (palTimer.current) clearTimeout(palTimer.current);
@@ -456,6 +464,10 @@ export default function App() {
             level={campaignLevel}
             pal={pal}
             palSay={palSay}
+            palEvent={palEvent}
+            palStill={!motion || prefersReducedMotion()}
+            palQuiet={overlay != null}
+            palLight={isLightBg(theme.bg)}
             builder={builder}
             liveVal={liveVal}
             foundSigs={foundSigs}
@@ -548,7 +560,7 @@ export default function App() {
 
 /* ------------------------------- BOARD ------------------------------------ */
 function Board(props) {
-  const { puzzle, screen, level, pal, palSay, builder, liveVal, foundSigs, revealSigs, usedIdx,
+  const { puzzle, screen, level, pal, palSay, palEvent, palStill, palQuiet, palLight, builder, liveVal, foundSigs, revealSigs, usedIdx,
     shakeTarget, completeWrong, banking, cleared, onNum, onOp, onUndo, onClear, onShuffle, onHint, onNext, onOpenMap } = props;
 
   // Size the number ring to exactly the space left over, so the whole board
@@ -667,16 +679,99 @@ function Board(props) {
 
       {/* companion Pal — cheers the player on. Cosmetic only, absolutely placed. */}
       {pal && (
-        <div className="mv-pal" style={{ "--pc": pal.color }}>
-          {palSay && <div className="mv-pal-bubble" key={"say-" + palSay.id}>{palSay.text}</div>}
-          <div className={"mv-pal-face" + (palSay ? " cheer" : "")} key={"face-" + ((palSay && palSay.id) || "idle")} aria-hidden="true">{pal.face}</div>
-        </div>
+        <PalSprite pal={pal} say={palSay} event={palEvent} still={palStill} quiet={palQuiet} light={palLight}
+          inputKey={builder.length + ":" + foundSigs.length} resetKey={puzzle.id} />
       )}
     </div>
   );
 }
 
 const OP_NAMES = { "+": "plus", "-": "minus", "×": "times", "÷": "divide" };
+/* ------------------------------ PAINTED PAL ------------------------------- */
+// Astra's pals: one box per character (the union of its 16 frames, cut by tools/cut_art.py), its feet on the box's
+// bottom edge, frames swapped on her cadence by palAnim.js. The tallest pal's box is the CSS height; the others keep
+// her relative sizes. Only the equipped pal's frames are fetched and decoded, before the first swap.
+const PAL_REF_H = Math.max(...Object.values(ART.pals).map((a) => a.h));
+function palSrc(id, name) { return "./art/" + ART.version + "/pals/" + id + "/" + name + ".webp"; }
+function prefersReducedMotion() {
+  try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; }
+}
+function isLightBg(hex) {   // relative luminance over 0.6: a soft shadow under the feet
+  const n = parseInt(String(hex).slice(1), 16);
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2] > 0.6;
+}
+function PalSprite({ pal, say, event, still, quiet, light, inputKey, resetKey }) {
+  const art = ART.pals[pal.id];
+  const rootRef = useRef(null), bubRef = useRef(null);
+  const [bubAt, setBubAt] = useState(null);   // {id, left, top[, narrow]} placed, {id, none} no free spot; another id = measuring
+  // The bubble never covers a bead or a control: beside the pal (head level first, down to just above the controls),
+  // else above it, else it stays quiet this time (the pal still cheers). Measured each time it speaks.
+  useLayoutEffect(() => {
+    if (!say) { setBubAt(null); return; }
+    const b = bubRef.current, root = rootRef.current, board = root && root.closest(".mv-board");
+    if (!b || !board) return;
+    const br = board.getBoundingClientRect(), pr = root.getBoundingClientRect(), bw = b.offsetWidth, bh = b.offsetHeight;
+    const blockers = [...board.querySelectorAll(".mv-tile, .mv-ctrl, .mv-op, .mv-center, .mv-builder")].map((e) => e.getBoundingClientRect());
+    const free = (l, t, w = bw, h = bh) => {
+      const x = pr.left + l, y = pr.top + t, bw = w, bh = h;
+      if (x < br.left || y < br.top || x + bw > br.right || y + bh > br.bottom) return false;
+      return !blockers.some((r) => x < r.right && r.left < x + bw && y < r.bottom && r.top < y + bh);
+    };
+    const tries = [];
+    for (let t = 0; t <= pr.height + 30 - bh; t += 2) tries.push([pr.width + 6, t]);
+    tries.push([0, -bh - 6]);
+    const hit = tries.find(([l, t]) => free(l, t));
+    if (hit) { setBubAt({ id: say.id, left: hit[0], top: hit[1] }); return; }
+    // a small phone: her line on at most two narrow lines above the pal, or nothing (never a column of single words)
+    const c = b.cloneNode(true); c.setAttribute("data-measure", ""); c.style.cssText = "visibility:hidden;white-space:normal;max-width:84px;padding:6px;left:0;top:0";
+    root.appendChild(c); const nw = c.offsetWidth, nh = c.offsetHeight; root.removeChild(c);
+    const twoLines = nh <= 2 * 12 * 1.2 + 12 + 4;
+    setBubAt(twoLines && free(0, -nh - 6, nw, nh) ? { id: say.id, left: 0, top: -nh - 6, narrow: true } : { id: say.id, none: true });
+  }, [say && say.id]);
+  const [frame, setFrame] = useState("idle_01");
+  const [readyId, setReadyId] = useState(null);   // the pal whose frames are decoded
+  const ready = readyId === pal.id;
+  const anim = useRef(null);
+  const held = useRef([]);                                   // the decoded frames of THIS pal only
+  const seen = useRef(event ? event.id : null);              // an event from before this board mounted never replays
+  useEffect(() => {
+    if (!art) return undefined;
+    let live = true; setFrame("idle_01");
+    const imgs = art.frames.map((f) => { const im = new window.Image(); im.src = palSrc(pal.id, f); return im; });
+    held.current = imgs;
+    Promise.all(imgs.map((im) => (im.decode ? im.decode().catch(() => {}) : Promise.resolve()))).then(() => { if (live) setReadyId(pal.id); });
+    return () => { live = false; held.current = []; };
+  }, [pal.id]);
+  useEffect(() => {
+    if (!art || !ready) return undefined;
+    const a = createPalAnimator({ onFrame: setFrame, still });
+    anim.current = a;
+    if (event && event.id !== seen.current) { seen.current = event.id; a.event(event.kind); }   // banked during the preload
+    const vis = () => a.setHidden(document.hidden);
+    document.addEventListener("visibilitychange", vis); vis();
+    return () => { document.removeEventListener("visibilitychange", vis); a.stop(); anim.current = null; };
+  }, [pal.id, ready, still]);
+  useEffect(() => { if (event && event.id !== seen.current && anim.current) { seen.current = event.id; anim.current.event(event.kind); } }, [event]);
+  useEffect(() => { if (anim.current) anim.current.setQuiet(quiet); }, [quiet, ready]);
+  useEffect(() => { if (anim.current) anim.current.input(); }, [inputKey]);
+  useEffect(() => { if (anim.current) anim.current.reset(); }, [resetKey]);
+  const bubble = say && (
+    <div className="mv-pal-bubble" key={"say-" + say.id} ref={bubRef}
+      style={!bubAt || bubAt.id !== say.id ? { visibility: "hidden" } : bubAt.none ? { display: "none" }
+        : { left: bubAt.left, top: bubAt.top, ...(bubAt.narrow ? { whiteSpace: "normal", maxWidth: 84, padding: 6 } : {}) }}>{say.text}</div>
+  );
+  if (!art) return (<div className="mv-pal" ref={rootRef} style={{ "--pc": pal.color }}>{bubble}<div className="mv-pal-face" aria-hidden="true">{pal.face}</div></div>);
+  return (
+    <div className={"mv-pal" + (light ? " light" : "")} ref={rootRef} style={{ "--pc": pal.color }}>
+      {bubble}
+      <div className="mv-pal-box" style={{ "--pw": (art.w / PAL_REF_H).toFixed(4), "--ph": (art.h / PAL_REF_H).toFixed(4) }} aria-hidden="true">
+        <img className="mv-pal-img" src={palSrc(pal.id, frame)} alt="" draggable="false" data-frame={frame} />
+      </div>
+    </div>
+  );
+}
+
 function exprText(tokens) {
   return tokens.map((t) => (t === "-" ? "−" : t)).join(" ");
 }
@@ -702,7 +797,7 @@ function Shop({ meta, boostActive, onBuySkin, onEquipSkin, onPreviewSkin, onBuyP
             return (
               <div key={p.id} className="mv-skincard" onClick={() => onPreviewPal(p.id)}>
                 <div className="mv-palswatch" style={{ background: `radial-gradient(circle at 50% 38%, ${p.color}44, transparent 70%)` }}>
-                  <span className="mv-palface">{p.face}</span>
+                  {ART.pals[p.id] ? <img className="mv-palport" src={palSrc(p.id, "portrait")} alt="" draggable="false" /> : <span className="mv-palface">{p.face}</span>}
                   {equipped && <span className="mv-equipped"><Check size={12} /></span>}
                 </div>
                 <div className="mv-skinmeta">
@@ -1022,7 +1117,9 @@ function PalPreview({ pal, owned, meta, onBuy, onClose }) {
       <div className="mv-modal mv-preview" onClick={(e) => e.stopPropagation()}
         style={{ background: `radial-gradient(circle at 50% 20%, ${pal.color}33, var(--surf))` }}>
         <button className="mv-icobtn mv-preview-x" onClick={onClose} aria-label="Close pal preview"><X size={18} /></button>
-        <div className="mv-preview-pal" style={{ "--pc": pal.color }}>{pal.face}</div>
+        {ART.pals[pal.id]
+          ? <img className="mv-preview-palimg" src={palSrc(pal.id, "portrait")} alt="" draggable="false" />
+          : <div className="mv-preview-pal" style={{ "--pc": pal.color }}>{pal.face}</div>}
         <div className="mv-preview-name">{pal.name}</div>
         <div className="mv-preview-vibe" style={{ color: "var(--muted)" }}>{pal.vibe}</div>
         <div className="mv-preview-say">“{pal.cheers[0]}”</div>
@@ -1123,15 +1220,16 @@ function StyleTag() {
     /* target beacon — the one bold "bead" of the board */
     .mv-target-wrap { margin: 3px 0 1px; position: relative; flex-shrink: 0; }
     .mv-beacon { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
-      width: clamp(78px, 13.5vh, 108px); height: clamp(78px, 13.5vh, 108px); border-radius: 36% 64% 60% 40% / 44% 42% 58% 56%;
-      background: radial-gradient(circle at 36% 30%, color-mix(in srgb, var(--target) 82%, #fff 40%), var(--target) 62%, color-mix(in srgb, var(--target) 78%, #000 22%));
-      color: var(--ttext); box-shadow: 0 12px 30px rgba(var(--tg), .38), 0 0 44px rgba(var(--tg), .42), inset 0 -9px 20px rgba(0,0,0,.18), inset 0 5px 12px rgba(255,255,255,.28);
+      width: clamp(78px, 13.5vh, 108px); height: clamp(78px, 13.5vh, 108px); border-radius: 50%; isolation: isolate;
+      color: var(--ttext);
       animation: mv-breathe 4.6s ease-in-out infinite; }
-    .mv-beacon::before { content:""; position: absolute; inset: -14px; border-radius: inherit; z-index: -1;
-      background: conic-gradient(from 0deg, rgba(var(--tg),0), rgba(var(--tg),.55), rgba(var(--tg),0)); filter: blur(10px);
-      animation: mv-spin 9s linear infinite; }
-    .mv-beacon::after { content:""; position: absolute; top: 15%; left: 24%; width: 34%; height: 26%; border-radius: 50%;
-      background: radial-gradient(circle at 40% 40%, rgba(255,255,255,.75), transparent 70%); pointer-events: none; }
+    /* the glow keeps its whole canvas so it fades to nothing (1.54 times the orb: its faintest tail stays inside .mv-main) */
+    .mv-beacon::before { content:""; position: absolute; inset: -27%; z-index: -2; pointer-events: none; background: var(--target); opacity: .9;
+      -webkit-mask: url(./art/t1/beads/target_glow.webp) center / 100% 100% no-repeat; mask: url(./art/t1/beads/target_glow.webp) center / 100% 100% no-repeat; }
+    .mv-beacon::after { content:""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+      background: radial-gradient(circle at 36% 28%, rgba(255,255,255,.42), rgba(255,255,255,0) 30%), url(./art/t1/beads/target_orb.webp) center / 100% 100% no-repeat, var(--target);
+      background-blend-mode: normal, multiply;
+      -webkit-mask: url(./art/t1/beads/target_orb.webp) center / 100% 100% no-repeat; mask: url(./art/t1/beads/target_orb.webp) center / 100% 100% no-repeat; }
     .mv-beacon-label { font-size: 11.5px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; opacity: .7; margin-top: -1px; }
     .mv-beacon-num { font-size: clamp(35px, 7.2vh, 48px); font-weight: 800; line-height: .92; letter-spacing: -1px; text-shadow: 0 1px 2px rgba(0,0,0,.12); }
     @keyframes mv-breathe { 0%,100% { transform: translateY(0) scale(1);} 50% { transform: translateY(-3px) scale(1.03);} }
@@ -1191,11 +1289,10 @@ function StyleTag() {
     .mv-tile { position: absolute; transform: translate(-50%, -50%);
       width: calc(var(--cd) * .30); height: calc(var(--cd) * .30);
       border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--edge) 55%, transparent); cursor: pointer;
-      background: radial-gradient(circle at 34% 28%, color-mix(in srgb, var(--tile) 78%, #fff 22%), var(--tile) 55%, var(--tile2)); color: var(--ttx);
-      box-shadow: 0 8px 16px rgba(0,0,0,.34), inset 0 3px 5px rgba(255,255,255,.4), inset 0 -6px 10px rgba(0,0,0,.2);
+      background: url(./art/t1/beads/bead_shade.webp) center / 100% 100% no-repeat, var(--tile); color: var(--ttx);
+      box-shadow: 0 8px 16px rgba(0,0,0,.30);
       display: flex; align-items: center; justify-content: center; transition: transform .12s, opacity .18s, filter .18s; padding: 0; }
-    .mv-tile::after { content:""; position: absolute; top: 15%; left: 24%; width: 32%; height: 24%; border-radius: 50%;
-      background: radial-gradient(circle at 40% 40%, rgba(255,255,255,.7), transparent 72%); pointer-events: none; }
+    /* the painted shade carries the bead's highlight: no CSS highlight on top of it */
     .mv-tile span { font-size: calc(var(--cd) * .125); font-weight: 800; letter-spacing: -.5px; position: relative; z-index: 1; }
     .mv-tile:active { transform: translate(-50%, -50%) scale(.9); }
     .mv-tile.used { opacity: .24; filter: grayscale(.5); pointer-events: none; transform: translate(-50%, -50%) scale(.78); }
@@ -1224,7 +1321,7 @@ function StyleTag() {
     .mv-page { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 16px 20px; -webkit-overflow-scrolling: touch; }
     .mv-hasbar .mv-page { padding-bottom: 76px; }
     .mv-hasbar .mv-board { padding-bottom: 66px; }
-    .mv-hasbar .mv-pal { bottom: 142px; }
+    .mv-hasbar .mv-pal { bottom: 122px; }
     .mv-page-title { font-size: 20px; font-weight: 800; letter-spacing: -.4px; margin: 6px 0 2px; }
     .mv-page-sub { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
 
@@ -1380,15 +1477,19 @@ function StyleTag() {
     .mv-eyebrow-btn:active { transform: scale(.96); }
 
     /* companion Pal — absolutely placed so it never affects the one-screen layout */
-    .mv-pal { position: absolute; left: 8px; bottom: 84px; z-index: 40; pointer-events: none;
-      display: flex; flex-direction: column; align-items: flex-start; }
+    .mv-pal { position: absolute; left: 4px; bottom: 64px; z-index: 40; pointer-events: none;
+      display: flex; flex-direction: column; align-items: flex-start; --palh: clamp(64px, 8.1vh, 74px); }
+    .mv-pal-box { position: relative; height: calc(var(--palh) * var(--ph)); width: calc(var(--palh) * var(--pw)); }
+    .mv-pal-img { position: absolute; left: 0; bottom: 0; width: 100%; height: 100%; display: block; -webkit-user-drag: none; user-select: none; }
+    .mv-pal.light .mv-pal-box::before { content: ""; position: absolute; left: 14%; right: 14%; bottom: -4px; height: 9px; border-radius: 50%;
+      background: radial-gradient(closest-side, color-mix(in srgb, var(--text) 28%, transparent), transparent); }
     .mv-pal-face { font-size: 40px; line-height: 1; filter: drop-shadow(0 6px 10px color-mix(in srgb, var(--pc, #000) 50%, transparent));
       animation: mv-palbob 2.6s ease-in-out infinite; }
     .mv-pal-face.cheer { animation: mv-palhop .55s cubic-bezier(.2,.9,.3,1.3); }
-    .mv-pal-bubble { max-width: 130px; margin-bottom: 4px; padding: 6px 10px; border-radius: 13px 13px 13px 3px;
+    .mv-pal-bubble { position: absolute; left: 0; top: 0; white-space: nowrap; padding: 6px 10px; border-radius: 13px 13px 13px 3px;
       background: color-mix(in srgb, var(--pc, var(--acc)) 24%, var(--surf2)); color: var(--text);
       border: 1.5px solid color-mix(in srgb, var(--pc, var(--acc)) 60%, transparent);
-      font-size: 12px; font-weight: 800; text-align: center; line-height: 1.2; white-space: normal;
+      font-size: 12px; font-weight: 800; text-align: center; line-height: 1.2;
       box-shadow: 0 6px 16px rgba(0,0,0,.3); animation: mv-bubblein .3s cubic-bezier(.2,.9,.3,1.3); }
     @keyframes mv-palbob { 0%,100% { transform: translateY(0);} 50% { transform: translateY(-5px);} }
     @keyframes mv-palhop { 0% { transform: translateY(0) scale(1);} 35% { transform: translateY(-16px) scale(1.14);} 60% { transform: translateY(0) scale(.96);} 100% { transform: translateY(0) scale(1);} }
@@ -1405,6 +1506,8 @@ function StyleTag() {
     .mv-palswatch { position: relative; height: 92px; border-radius: 11px; overflow: hidden; display: flex; align-items: center; justify-content: center;
       background: color-mix(in srgb, var(--surf2) 60%, transparent); }
     .mv-palface { font-size: 50px; line-height: 1; animation: mv-palbob 2.8s ease-in-out infinite; filter: drop-shadow(0 4px 8px rgba(0,0,0,.3)); }
+    .mv-palport { width: 84px; height: 84px; object-fit: contain; filter: drop-shadow(0 4px 8px rgba(0,0,0,.22)); }
+    .mv-preview-palimg { display: block; width: 128px; height: 128px; object-fit: contain; margin: 4px auto 10px; filter: drop-shadow(0 8px 16px rgba(0,0,0,.28)); }
 
     /* journey / world map */
     .mv-worldcard { background: color-mix(in srgb, var(--surf) 55%, transparent); border-radius: 18px; padding: 12px; margin-bottom: 14px;

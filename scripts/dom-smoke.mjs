@@ -35,6 +35,8 @@ try { Object.defineProperty(globalThis, "navigator", { value: dom.window.navigat
 globalThis.IS_REACT_ACT_ENVIRONMENT = false;
 globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
 globalThis.requestAnimationFrame = (cb) => setTimeout(() => cb(Date.now()), 0);
+const realSetTimeout = globalThis.setTimeout;
+globalThis.setTimeout = (fn, ms, ...a) => realSetTimeout(fn, ms >= 15000 ? ms / 20 : ms, ...a);   // 18 s think = 900 ms here
 
 let savedMeta = null;
 let seed = { seenIntro: true };   // what the "saved game" holds at mount (phase 2 seeds a level)
@@ -60,6 +62,12 @@ const noteText = (n) => {
 };
 new dom.window.MutationObserver((muts) => { for (const m of muts) { if (m.type === "characterData") noteText(m.target); else m.addedNodes.forEach(noteText); } })
   .observe(document.body, { childList: true, subtree: true, characterData: true });
+const palFrames = [];         // every frame the painted pal shows, in order (the img's data-frame)
+let bubbles = 0;              // speech bubbles that appeared
+new dom.window.MutationObserver((muts) => { for (const m of muts) m.addedNodes.forEach((n) => { if (n.classList && n.classList.contains("mv-pal-bubble") && !n.hasAttribute("data-measure")) bubbles++; }); })
+  .observe(document.body, { childList: true, subtree: true });
+new dom.window.MutationObserver((muts) => { for (const m of muts) if (m.target.classList && m.target.classList.contains("mv-pal-img")) palFrames.push(m.target.getAttribute("data-frame")); })
+  .observe(document.body, { attributes: true, subtree: true, attributeFilter: ["data-frame"] });
 const unnamed = new Set();   // icon buttons seen without an accessible name
 const namedIcons = new Set();
 const noteIcons = () => [...document.querySelectorAll(".mv-icobtn")].forEach((b) => { const n = (b.getAttribute("aria-label") || "").trim(); if (!n) unnamed.add(b.outerHTML.slice(0, 60)); else namedIcons.add(n); });
@@ -119,10 +127,32 @@ async function play(tokens) {
   await sleep(400); // past the 300ms bank lock
 }
 
+const palImg0 = q(".mv-pal-img");
+A("the painted pal stands on the board", !!palImg0 && /^\.\/art\/t1\/pals\/pip\/(idle|think)_0\d\.webp$/.test(palImg0.getAttribute("src")), palImg0 && palImg0.getAttribute("src"));
+const palBox = q(".mv-pal-box");
+// the box's shape must be the frame's own shape: read the width and height from the WebP file itself
+const webpSize = (file) => { const b = (fsMod).readFileSync(file); const k = b.toString("ascii", 12, 16);
+  if (k === "VP8X") return [1 + b.readUIntLE(24, 3), 1 + b.readUIntLE(27, 3)];
+  if (k === "VP8L") { const v = b.readUInt32LE(21); return [1 + (v & 0x3fff), 1 + ((v >> 14) & 0x3fff)]; }
+  return [b.readUInt16LE(26) & 0x3fff, b.readUInt16LE(28) & 0x3fff]; };
+const fsMod = await import("node:fs");
+const [fw, fh] = webpSize(path.join(root, "public", "art", "t1", "pals", "pip", "idle_01.webp"));
+const pw = parseFloat(palBox && palBox.style.getPropertyValue("--pw")), ph = parseFloat(palBox && palBox.style.getPropertyValue("--ph"));
+A("the pal's box has the frame's own shape", Math.abs(pw / ph - fw / fh) < 0.002 && ph > 0.85 && ph <= 1, `box ${pw}/${ph} frame ${fw}x${fh}`);
+palFrames.length = 0; bubbles = 0;
 await play(sols[0]);
+await sleep(700);   // the cheer is 100 + 120 + 180 + 140 ms
+const c1 = palFrames.indexOf("cheer_01");
+A("a bank plays cheer_01..04 then idle", c1 >= 0 && palFrames.slice(c1, c1 + 5).join() === "cheer_01,cheer_02,cheer_03,cheer_04,idle_01", palFrames.join(" "));
 A("auto-commit banks a find", qa(".mv-findchip").length === 1);
 await play(sols[1]);
 A("second find banks", qa(".mv-findchip").length === 2);
+A("the bubble speaks once for two banks inside 6 s", bubbles === 1, "bubbles=" + bubbles);
+// a modal is up: the think pose must not play (its 18 s clock runs at 900 ms in this test; the bank was the last input)
+click(q('[aria-label="Settings"]')); await sleep(30); palFrames.length = 0; await sleep(1500);
+A("think never plays under a modal", !palFrames.includes("think_01"), palFrames.join(" "));
+click(q(".mv-modal-head .mv-icobtn")); await sleep(1500);
+A("think plays once the board is clear again", palFrames.includes("think_01"), palFrames.join(" "));
 
 const meta = savedMeta ? JSON.parse(savedMeta) : {};
 A("finds persisted", Object.values(meta.finds || {})[0]?.length === 2);
@@ -140,6 +170,7 @@ A("star 3 label follows the puzzle (level 1)", condTexts()[2] === star3Label(P1)
 A("results name the bank pay", (q(".mv-win-paid") || {}).textContent === paidLine, (q(".mv-win-paid") || {}).textContent);
 key("Enter"); await sleep(150);
 A("Enter advances to a fresh puzzle", !q(".mv-win-title") && qa(".mv-findchip").length === 0);
+A("the next puzzle sets the pal back to idle", (q(".mv-pal-img") || { getAttribute: () => "" }).getAttribute("data-frame") === "idle_01", palFrames.slice(-4).join(" "));
 A("level persisted", JSON.parse(savedMeta).level === 2, "level=" + JSON.parse(savedMeta).level);
 // level 2 has one way beyond the two required: its star 3 can only mean finding every way
 const P2 = genPuzzle(1002, levelOpts(2));
@@ -156,7 +187,8 @@ click(navBtn("Map")); await sleep(120);
 A("Journey map renders worlds", qa(".mv-worldcard").length >= 1);
 A("map shows level nodes", qa(".mv-lvlnode").length >= 8);
 click(navBtn("Shop")); await sleep(120);
-A("shop opens on Pals tab", qa(".mv-palface").length >= 1);
+const ports = qa("img.mv-palport").map((i) => i.getAttribute("src"));
+A("shop opens on Pals tab with the ten portraits", ports.join() === PALS.map((p) => "./art/t1/pals/" + p.id + "/portrait.webp").join(), ports.length + " portraits");
 const skinsTab = qa(".mv-shoptab").find((b) => b.textContent.includes("Skins"));
 click(skinsTab); await sleep(80);
 A("shop can switch to Skins tab", qa(".mv-skinswatch").length >= 1);
@@ -166,8 +198,9 @@ const LC = (() => { for (let L = 2; L <= 48; L++) if (genPuzzle(1000 + L, levelO
 const PC = genPuzzle(1000 + LC, levelOpts(LC));
 rootA.unmount();
 el = document.createElement("div"); document.body.appendChild(el);
-seed = { seenIntro: true, level: LC };
+seed = { seenIntro: true, level: LC, motion: false };   // Animations off: the pal shows idle_01 only
 mount(el);
+palFrames.length = 0;
 await waitFor(".mv-beacon-num"); await sleep(200);
 const poolB = qa(".mv-tile").map((t) => parseInt(t.textContent, 10));
 const targetB = parseInt(q(".mv-beacon-num").textContent, 10);
@@ -176,6 +209,7 @@ const solsB = findSolutions(poolB, targetB);
 for (let i = 0; i < PC.required && i < solsB.length; i++) await play(solsB[i]);
 const nextB = q(".mv-ctrl.next");
 if (nextB) { click(nextB); await sleep(150); }
+A("Animations off: the pal never leaves idle_01", palFrames.every((f) => f === "idle_01") && (q(".mv-pal-img") || { getAttribute: () => "" }).getAttribute("data-frame") === "idle_01", palFrames.join(" "));
 A("star 2 label follows the puzzle (level " + LC + ")", condTexts()[1] === star2Label(PC.hasClean), JSON.stringify(condTexts()[1]) + " hasClean=" + PC.hasClean);
 A("star 3 label follows the puzzle (level " + LC + ")", condTexts()[2] === star3Label(PC), JSON.stringify(condTexts()[2]));
 key("Enter"); await sleep(150);
