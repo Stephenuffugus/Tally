@@ -1298,7 +1298,8 @@ function StyleTag() {
     .mv-confetti { position: fixed; left: 50%; top: 50%; width: min(100vw, 450px); height: min(100vw, 450px); transform: translate(-50%, -50%); pointer-events: none; z-index: 2; object-fit: contain; }
     .mv-nomotion .mv-starwrap.lit .mv-starimg { animation: none; }
     .mv-bankfx { position: absolute; left: 50%; top: 50%; width: 128px; height: 128px; transform: translate(-50%, -50%); pointer-events: none; z-index: 3; }
-    .mv-dailycard { width: 100%; max-width: 300px; aspect-ratio: 450 / 300; background: center / 100% 100% no-repeat; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; padding: 10px 14px; box-sizing: border-box; margin: 0 auto 2px; }
+    .mv-dailycard { width: 100%; max-width: 220px; aspect-ratio: 450 / 300; background: center / 100% 100% no-repeat; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; text-align: center; padding: 8px 12px; box-sizing: border-box; margin: 0 auto 2px; }
+    @media (max-height: 700px) { .mv-dailycard { max-width: 126px; padding: 4px 8px; margin-bottom: 0; } .mv-dailydate { font-size: 9.5px; letter-spacing: 1px; } .mv-dailystate { font-size: 11.5px; } .mv-dailystreak { font-size: 10.5px; } }
     .mv-dailydate { font-size: 11.5px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--acc); }
     .mv-dailystate { font-size: 14px; font-weight: 800; color: var(--text); }
     .mv-dailystreak { font-size: 12.5px; font-weight: 700; color: var(--muted); }
