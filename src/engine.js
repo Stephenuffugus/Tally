@@ -72,6 +72,15 @@ function solveAll(pool) {
   return map;
 }
 
+/* Part 4: the guided first solve is a FIXED puzzle (never a seed, so it cannot drift with the generator): beads 2, 3, 5, 8, target 10;
+   the guide points at 2 then + then 8, then "Find another way" (2 x 5 is there too). Two ways required. */
+function guidePuzzle() {
+  const pool = [2, 3, 5, 8];
+  const m = solveAll(pool).get(10);
+  const sols = m ? [...m.values()] : [];
+  return { id: "guide", pool, target: 10, solutions: sols, total: sols.length, required: Math.min(2, sols.length), hasClean: sols.some((x) => x.count === 2) };
+}
+
 function pickDistinct(rng, n, lo, hi) {
   const s = new Set();
   let guard = 0;
@@ -142,4 +151,4 @@ function daysBetween(aIso, bIso) {
   return Math.round((b - a) / 86400000);
 }
 
-export { OPS, evalExpr, sigOf, mulberry32, solveAll, pickDistinct, genPuzzle, shuffleArr, levelOpts, todayKey, isoDay, daysBetween };
+export { OPS, evalExpr, sigOf, mulberry32, solveAll, pickDistinct, genPuzzle, guidePuzzle, shuffleArr, levelOpts, todayKey, isoDay, daysBetween };

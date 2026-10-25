@@ -6,8 +6,9 @@ import { createRequire } from "node:module";
 import { writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { evalExpr, OPS, sigOf, genPuzzle, levelOpts, todayKey } from "../src/engine.js";
-import * as CFG from "../src/config.js";   // a namespace, so an older copy without TALLY_BUILD still runs (and fails its check)
+import { evalExpr, OPS, sigOf, genPuzzle, guidePuzzle, levelOpts, todayKey } from "../src/engine.js";
+import * as CFG from "../src/config.js";
+import { DEFAULT_META } from "../src/storage.js";   // a namespace, so an older copy without TALLY_BUILD still runs (and fails its check)
 const { PALS, ECONOMY, TALLY_BUILD, worldOfLevel } = CFG;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -39,7 +40,7 @@ const realSetTimeout = globalThis.setTimeout;
 globalThis.setTimeout = (fn, ms, ...a) => realSetTimeout(fn, ms >= 15000 ? ms / 20 : ms, ...a);   // 18 s think = 900 ms here
 
 let savedMeta = null;
-let seed = { seenIntro: true };   // what the "saved game" holds at mount (phase 2 seeds a level)
+let seed = { seenIntro: true, guideDone: true };   // what the "saved game" holds at mount (phase 2 seeds a level); guideDone: the level 1 path, not Part 4's guide
 dom.window.storage = {
   get: async () => ({ value: JSON.stringify(seed) }),
   set: async (_k, v) => { savedMeta = v; return {}; },
@@ -207,7 +208,7 @@ const LC = (() => { for (let L = 2; L <= 48; L++) if (genPuzzle(1000 + L, levelO
 const PC = genPuzzle(1000 + LC, levelOpts(LC));
 rootA.unmount();
 el = document.createElement("div"); document.body.appendChild(el);
-seed = { seenIntro: true, level: LC, motion: false };   // Animations off: the pal shows idle_01 only
+seed = { seenIntro: true, level: LC, motion: false, guideDone: true };   // Animations off: the pal shows idle_01 only
 const rootB = mount(el);
 palFrames.length = 0;
 await waitFor(".mv-beacon-num"); await sleep(200);
@@ -290,7 +291,7 @@ rootC.unmount();
   if (typeof rootC !== "undefined" && rootC) rootC.unmount();
   document.body.insertAdjacentHTML("beforeend", '<div id="mv-splashplate"></div>');
   el = document.createElement("div"); document.body.appendChild(el);
-  seed = { seenIntro: true };
+  seed = { seenIntro: true, guideDone: true };
   let rootD = mount(el);
   await waitFor(".mv-beacon-num"); await sleep(500);
   A("Part 3: the splash plate is removed after mount", !document.getElementById("mv-splashplate"));
@@ -311,7 +312,7 @@ rootC.unmount();
   rootD.unmount();
   // c. a daily already done today: the win says replay and brings no confetti
   el = document.createElement("div"); document.body.appendChild(el);
-  seed = { seenIntro: true, lastDaily: todayIso(), streak: 3 };
+  seed = { seenIntro: true, lastDaily: todayIso(), streak: 3, guideDone: true };
   rootD = mount(el);
   await waitFor(".mv-beacon-num"); await sleep(300);
   click(navBtn3("Daily")); await sleep(150);
@@ -324,7 +325,7 @@ rootC.unmount();
   rootD.unmount();
   // d. reduced motion: a campaign clear shows the pal's last pose, no star pop, no confetti
   el = document.createElement("div"); document.body.appendChild(el);
-  seed = { seenIntro: true, motion: false };
+  seed = { seenIntro: true, motion: false, guideDone: true };
   rootD = mount(el);
   await waitFor(".mv-beacon-num"); await sleep(300);
   {
@@ -332,6 +333,56 @@ rootC.unmount();
     A("Part 3: under reduced motion the win has no confetti and no star pop, and the pal holds its last win pose", !!q(".mv-win-title") && !q(".mv-confetti") && qa(".mv-starpop").length === 0 && /win_06\.webp$/.test((q(".mv-winpal img") || { getAttribute: () => "" }).getAttribute("src") || ""), (q(".mv-winpal img") || {}).getAttribute && q(".mv-winpal img").getAttribute("src"));
   }
   rootD.unmount();
+}
+
+// Part 4: the guided first solve for a fresh save only
+{
+  const P1 = genPuzzle(1001, levelOpts(1)), G = guidePuzzle();
+  const tiles = () => qa(".mv-tile").map((t) => parseInt(t.textContent, 10)).sort((a, b) => a - b).join(",");
+  const target = () => parseInt(q(".mv-beacon-num").textContent, 10);
+  const glyph4 = (g) => ({ "-": "−", "*": "×", "/": "÷", "x": "×" })[g] || g;
+  const tap4 = async (x) => { const n = (typeof x === "number") ? qa(".mv-tile").find((t) => !t.classList.contains("used") && parseInt(t.textContent, 10) === x) : qa(".mv-op").find((b) => b.textContent === glyph4(x)); if (n) click(n); await sleep(20); };
+  // a. a save that has solved before gets level 1, not the guide
+  el = document.createElement("div"); document.body.appendChild(el);
+  seed = { seenIntro: true, earns: { first_solve: 1 } };
+  let rootE = mount(el); await waitFor(".mv-beacon-num"); await sleep(300);
+  A("Part 4: a save with a first solve gets level 1, not the guide", target() === P1.target && !q(".mv-guideline"), `target ${target()} want ${P1.target}`);
+  rootE.unmount();
+  // b. a fresh save gets the guide: beads 2 3 5 8, target 10, her first line, a Skip button, the 2 pointed at
+  el = document.createElement("div"); document.body.appendChild(el);
+  seed = { seenIntro: true }; savedMeta = null;
+  rootE = mount(el); await waitFor(".mv-beacon-num"); await sleep(300);
+  A("Part 4: a fresh save gets the guide (2, 3, 5, 8 make 10) with her first line and a Skip", tiles() === "2,3,5,8" && target() === 10 && /Tap a number/.test((q(".mv-guideline") || {}).textContent || "") && !!q(".mv-guideskip"), `tiles ${tiles()} target ${target()} line ${(q(".mv-guideline") || {}).textContent}`);
+  const pointed = () => (q(".guide-target") || {}).textContent;
+  A("Part 4: the guide points at 2 first", pointed() === "2", pointed());
+  await tap4(2);
+  const lineText = () => (q(".mv-guideline") || {}).textContent || "";
+  A("Part 4: then at plus", pointed() === "+" && /Choose an operation/.test(lineText()), pointed() + " " + lineText());
+  await tap4("+");
+  A("Part 4: then at 8", pointed() === "8" && /Reach the target/.test(lineText()), pointed() + " " + lineText());
+  await tap4(8); await sleep(400);
+  A("Part 4: 2 plus 8 banks and the guide says find another way", qa(".mv-findchip").length === 1 && /Find another way/.test(lineText()) && !q(".guide-target"), lineText());
+  await tap4(2); await tap4("*"); await tap4(5); await sleep(400);
+  const m4 = savedMeta ? JSON.parse(savedMeta) : {};
+  A("Part 4: 2 times 5 banks too; both ways paid 14 each and nothing was charged", qa(".mv-findchip").length === 2 && (m4.coins || 0) === DEFAULT_META.coins + 2 * ECONOMY.SOLVE_COINS && !!q(".mv-ctrl.next"), `coins ${m4.coins} want ${DEFAULT_META.coins + 2 * ECONOMY.SOLVE_COINS} next ${!!q(".mv-ctrl.next")}`);
+  if (q(".mv-ctrl.next")) click(q(".mv-ctrl.next")); await sleep(150);
+  A("Part 4: the guide ends on the win sheet, and Next brings the real level 1", !!q(".mv-win-title"));
+  key("Enter"); await sleep(200);
+  A("Part 4: after the guide the real level 1 puzzle stands and the level is still 1", target() === P1.target && !q(".mv-guideline") && /· 1$/.test((q(".mv-eyebrow-btn") || {}).textContent || ""), `target ${target()} want ${P1.target} eyebrow ${(q(".mv-eyebrow-btn") || {}).textContent}`);
+  rootE.unmount();
+  // c. Skip from the first beat ends the guide and the normal level 1 appears; the guide is replayable from How to play
+  el = document.createElement("div"); document.body.appendChild(el);
+  seed = { seenIntro: true }; savedMeta = null;
+  rootE = mount(el); await waitFor(".mv-beacon-num"); await sleep(300);
+  if (q(".mv-guideskip")) click(q(".mv-guideskip")); await sleep(200);
+  const m4b = savedMeta ? JSON.parse(savedMeta) : {};
+  A("Part 4: Skip ends the guide and the normal level 1 appears, remembered in the save", target() === P1.target && !q(".mv-guideline") && m4b.guideDone === true, `target ${target()} guideDone ${m4b.guideDone}`);
+  click(q('[aria-label="How to play"]')); await sleep(100);
+  const replay = qa(".mv-modal .mv-btn").find((b) => /Replay the guided/.test(b.textContent));
+  A("Part 4: How to play offers the guide again", !!replay);
+  if (replay) { click(replay); await sleep(200); }
+  A("Part 4: the replayed guide is the same fixed puzzle", tiles() === "2,3,5,8" && target() === 10 && !!q(".mv-guideline"), `tiles ${tiles()} target ${target()}`);
+  rootE.unmount();
 }
 
 rmSync(entry, { force: true }); rmSync(outfile, { force: true });
