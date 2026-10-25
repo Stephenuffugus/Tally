@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { evalExpr, OPS, sigOf, genPuzzle, levelOpts } from "../src/engine.js";
 import * as CFG from "../src/config.js";   // a namespace, so an older copy without TALLY_BUILD still runs (and fails its check)
-const { PALS, ECONOMY, TALLY_BUILD } = CFG;
+const { PALS, ECONOMY, TALLY_BUILD, worldOfLevel } = CFG;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
@@ -184,8 +184,13 @@ key("Enter"); await sleep(150);
 // Journey map + Pals shop (new screens)
 const navBtn = (label) => qa(".mv-navbtn").find((b) => b.textContent.includes(label));
 click(navBtn("Map")); await sleep(120);
-A("Journey map renders worlds", qa(".mv-worldcard").length >= 1);
-A("map shows level nodes", qa(".mv-lvlnode").length >= 8);
+A("Journey map renders the painted world panels", qa(".mv-mappanel").length >= 1 && /art\/t1\/map\/meadow\.webp/.test(q(".mv-mappanel").getAttribute("style") || ""));
+A("map shows its eight level buttons on her stops", qa(".mv-mappanel")[0] && qa(".mv-mappanel")[0].querySelectorAll(".mv-lvl").length === 8, qa(".mv-lvl").length + " buttons");
+{ // every stop button sits where her anchor says (the art.json written by the cut tool from map_anchors.json)
+  const a0 = JSON.parse((await import("node:fs")).readFileSync(path.join(root, "src", "art-t1.json"), "utf8")).map.stops.meadow;
+  const btns = [...qa(".mv-mappanel")[0].querySelectorAll(".mv-lvl")];
+  A("the stops stand on her anchors", btns.length === 8 && btns.every((b, k) => b.style.left === a0[k][0] * 100 + "%" && b.style.top === a0[k][1] * 100 + "%"), btns.slice(0, 2).map((b) => b.style.left + "," + b.style.top).join(" "));
+}
 click(navBtn("Shop")); await sleep(120);
 const ports = qa("img.mv-palport").map((i) => i.getAttribute("src"));
 A("shop opens on Pals tab with the ten portraits", ports.join() === PALS.map((p) => "./art/t1/pals/" + p.id + "/portrait.webp").join(), ports.length + " portraits");
@@ -199,7 +204,7 @@ const PC = genPuzzle(1000 + LC, levelOpts(LC));
 rootA.unmount();
 el = document.createElement("div"); document.body.appendChild(el);
 seed = { seenIntro: true, level: LC, motion: false };   // Animations off: the pal shows idle_01 only
-mount(el);
+const rootB = mount(el);
 palFrames.length = 0;
 await waitFor(".mv-beacon-num"); await sleep(200);
 const poolB = qa(".mv-tile").map((t) => parseInt(t.textContent, 10));
@@ -241,6 +246,25 @@ A("no ! or dash in any rendered text", badText.length === 0, badText.slice(0, 5)
 const palBad = PALS.flatMap((p) => [...p.cheers, p.win]).filter((s) => BAD.test(s));
 A("pal lines carry no ! or dash", palBad.length === 0, palBad.slice(0, 3).join(" | "));
 A("rendered text was recorded", seenText.size > 40, "texts=" + seenText.size);
+
+// Part 2: the board stands on its world's plate at the world's levels, and the Endless panel names its real levels
+rootB.unmount();
+const plates = [];
+let rootC = null;
+for (const L of [1, 8, 9, 48, 49, 57]) {
+  if (rootC) rootC.unmount();
+  el = document.createElement("div"); document.body.appendChild(el);
+  seed = { seenIntro: true, level: L };
+  rootC = mount(el);
+  await waitFor(".mv-beacon-num"); await sleep(120);
+  const b = q(".mv-board"), want = worldOfLevel(L).world.id;   // the world worked out here from config.js
+  plates.push({ L, want, got: b && b.getAttribute("data-world"), url: b && b.style.getPropertyValue("--plate") });
+}
+A("the board's plate follows the world for levels 1, 8, 9, 48, 49, 57", plates.every((p) => p.got === p.want && p.url.indexOf("art/t1/worlds/" + p.want + ".webp") >= 0), JSON.stringify(plates.map((p) => p.L + ":" + p.got + "/" + p.want)));
+click(navBtn("Map")); await sleep(150);
+{ const w57 = worldOfLevel(57), panel = qa(".mv-mappanel").find((s) => s.getAttribute("data-world") === "endless" && s.textContent.indexOf("Levels " + w57.from + " to " + w57.to) >= 0);
+  A("the Endless panel names its real levels (" + w57.from + " to " + w57.to + ")", !!panel && [...panel.querySelectorAll(".mv-lvl")].map((x) => x.querySelector(".mv-lvlnum") && x.querySelector(".mv-lvlnum").textContent).filter(Boolean).indexOf(String(w57.from)) >= 0, qa(".mv-mappanel").length + " panels"); }
+rootC.unmount();
 
 rmSync(entry, { force: true }); rmSync(outfile, { force: true });
 console.log("\n" + results.join("\n"));
