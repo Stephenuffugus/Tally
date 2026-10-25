@@ -1,5 +1,5 @@
 /* Tally service worker — installability. NETWORK-FIRST (Sky Wolf house rule). */
-var CACHE = "tally-v4";
+var CACHE = "tally-v5";
 /* Only ever delete caches that belong to THIS app. `caches` is shared by the
    whole origin, so an unfiltered sweep deletes every sibling app's cache too. */
 var OWNED = /^tally\-/;
