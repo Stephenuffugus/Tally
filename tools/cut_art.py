@@ -90,6 +90,27 @@ for n in ("map_stop", "map_stop_done"):
     st = Image.open(os.path.join(SRC, "map", n + ".png")).convert("RGBA").resize((64, 64), Image.LANCZOS)
     sizes[f"map/{n}.webp"] = save(st, os.path.join(OUT, "map", n + ".webp"))
 
+# Part 3 (plans/tally/BUILD-PLAN-OCT25.md): the win moment, the daily card, the splash, the wordmark, the skins (new files only,
+# under t1/ui, t1/fx, t1/skins). bank_06 and confetti_06 are empty frames: dropped. Her skin file names map to the code's skin ids.
+art["ui"], art["fx"], art["skins"] = {}, {}, {}
+UI = (("logo", (500, 200)), ("win_banner", (450, 150)), ("daily_card", (450, 300)), ("star_full", (80, 80)), ("star_empty", (80, 80)),
+      ("coin", (64, 64)), ("gem", (64, 64)), ("hint", (64, 64)), ("freeze", (64, 64)), ("double_coins", (64, 64)), ("streak_flame", (64, 64)))
+for name, wh in UI:
+    im = Image.open(os.path.join(SRC, "ui", name + ".png")).convert("RGBA").resize(wh, Image.LANCZOS)
+    sizes[f"ui/{name}.webp"] = save(im, os.path.join(OUT, "ui", name + ".webp")); art["ui"][name] = f"ui/{name}.webp"
+splash = Image.open(os.path.join(SRC, "ui", "splash.jpg")).convert("RGB").resize((540, 960), Image.LANCZOS)
+sizes["ui/splash.webp"] = save(splash, os.path.join(OUT, "ui", "splash.webp"), q=80); art["ui"]["splash"] = "ui/splash.webp"
+for name, cnt, side in (("bank", 5, 128), ("confetti", 5, 450), ("star_pop", 4, 96)):
+    art["fx"][name] = []
+    for i in range(1, cnt + 1):
+        im = Image.open(os.path.join(SRC, "fx", f"{name}_{i:02d}.png")).convert("RGBA").resize((side, side), Image.LANCZOS)
+        sizes[f"fx/{name}_{i:02d}.webp"] = save(im, os.path.join(OUT, "fx", f"{name}_{i:02d}.webp")); art["fx"][name].append(f"fx/{name}_{i:02d}.webp")
+SKINS = {"abacus": "abacus", "twilight": "twilight", "sunrise": "sunrise", "forest": "deep_forest", "ink": "sumi_ink", "ocean": "abyss",
+         "sakura": "sakura", "neon": "arcade", "ember": "ember", "aurora": "aurora", "bubblegum": "bubblegum"}
+for cid, her in SKINS.items():
+    im = Image.open(os.path.join(SRC, "skins", f"skin_{her}.png")).convert("RGBA").resize((200, 200), Image.LANCZOS)
+    sizes[f"skins/{cid}.webp"] = save(im, os.path.join(OUT, "skins", cid + ".webp")); art["skins"][cid] = f"skins/{cid}.webp"
+
 with open(os.path.join(OUT, "art.json"), "w") as fh:
     json.dump(art, fh, indent=1)
 # the same manifest for the bundle (Vite does not import from public/): the pal boxes are known before any frame loads
