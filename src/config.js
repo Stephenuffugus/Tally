@@ -104,6 +104,8 @@ export const ECONOMY = {
 };
 
 // The build a phone holds, shown small in Settings. Bump with every deploy (package.json version, sw.js CACHE, the ?v= on sw.js).
-export const TALLY_BUILD = "t3";
+export const TALLY_BUILD = "t4";
+// Part 4: her tutorial lines (ui_copy.json), one per beat of the guided first solve
+export const TUTORIAL = ["Tap a number", "Choose an operation", "Reach the target", "Find another way"];
 
 export { SKINS, skinById, PALS, palById, WORLDS, WORLD_SIZE, worldOfLevel };

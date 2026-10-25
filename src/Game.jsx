@@ -12,8 +12,8 @@ import {
    + streaks + daily challenge + persistence, wired for the Sky Wolf portal.
    ========================================================================== */
 
-import { OPS, evalExpr, sigOf, genPuzzle, shuffleArr, levelOpts, todayKey, isoDay, daysBetween } from "./engine.js";
-import { SKINS, skinById, PALS, palById, WORLDS, WORLD_SIZE, worldOfLevel, ECONOMY, TALLY_BUILD } from "./config.js";
+import { OPS, evalExpr, sigOf, genPuzzle, guidePuzzle, shuffleArr, levelOpts, todayKey, isoDay, daysBetween } from "./engine.js";
+import { SKINS, skinById, PALS, palById, WORLDS, WORLD_SIZE, worldOfLevel, ECONOMY, TALLY_BUILD, TUTORIAL } from "./config.js";
 import { createPalAnimator, palMaySpeak } from "./palAnim.js";
 import ART from "./art-t1.json";   // written by tools/cut_art.py with the art in public/art/t1
 import { DEFAULT_META, loadMeta, saveMeta } from "./storage.js";
@@ -66,7 +66,8 @@ export default function App() {
       setMetaState(m);
       setFinds(m.finds || {});
       setCampaignLevel(m.level);
-      setCampaign(genPuzzle(1000 + m.level, levelOpts(m.level)));
+      const fresh = !(m.earns && m.earns.first_solve) && (m.level || 1) === 1 && !m.guideDone;   // Part 4: a fresh save starts on the guided first solve
+      setCampaign(fresh ? guidePuzzle() : genPuzzle(1000 + m.level, levelOpts(m.level)));
       setDaily(genPuzzle(todayKey(), { poolSize: 5, lo: 1, hi: 22, tMin: 12, tMax: 99, reqCap: 3 }));
       setLoaded(true);
       if (!m.seenIntro) setOverlay("howto");
@@ -352,7 +353,14 @@ export default function App() {
     setTimeout(() => setParticles([]), 2400);
   }
 
+  const guideOn = !!(campaign && campaign.id === "guide");
+  function endGuide() {   // Part 4: the guide ends (finished or skipped): the real level 1, no level advance, nothing charged
+    setMeta((m) => ({ ...m, guideDone: true }));
+    setOverlay(null); setCampaign(genPuzzle(1001, levelOpts(1)));
+  }
+  function replayGuide() { setOverlay(null); setScreen("play"); setCampaign(guidePuzzle()); }
   function nextLevel() {
+    if (campaign && campaign.id === "guide") { endGuide(); return; }
     setOverlay(null); setWinData(null);
     if (screen === "daily") { setScreen("play"); return; }
     const nl = campaignLevel + 1;
@@ -479,6 +487,8 @@ export default function App() {
             level={campaignLevel}
             campaignLevel={campaignLevel}
             daily={dailyInfo}
+            guide={guideOn}
+            onSkipGuide={endGuide}
             pal={pal}
             palSay={palSay}
             palEvent={palEvent}
@@ -561,7 +571,7 @@ export default function App() {
           onReset={() => { setMeta({ ...DEFAULT_META }); setFinds({}); setReveals({}); setCampaignLevel(1); setCampaign(genPuzzle(1001, levelOpts(1))); setOverlay(null); go("play"); showToast("Progress reset", "info"); }} />
       )}
       {overlay === "howto" && (
-        <HowToOverlay onClose={() => { setOverlay(null); if (!meta.seenIntro) setMeta((m) => ({ ...m, seenIntro: true })); }} />
+        <HowToOverlay onClose={() => { setOverlay(null); if (!meta.seenIntro) setMeta((m) => ({ ...m, seenIntro: true })); }} onReplayGuide={() => { if (!meta.seenIntro) setMeta((m) => ({ ...m, seenIntro: true })); replayGuide(); }} />
       )}
       {typeof overlay === "string" && overlay.startsWith("skin:") && (
         <SkinPreview skin={skinById(overlay.slice(5))} owned={meta.owned.includes(overlay.slice(5))}
@@ -607,6 +617,7 @@ function Board(props) {
   const bonusCount = Math.max(0, foundSigs.length - puzzle.required);
   const foundSolutions = foundSigs.map((sig) => puzzle.solutions.find((s) => s.sig === sig)).filter(Boolean);
   const showEq = builder.length > 0;
+  const guideStep = !props.guide ? -1 : foundSolutions.length >= 1 ? 3 : builder.length === 0 ? 0 : builder.length === 1 ? 1 : 2;   // Part 4
 
   const W = worldOfLevel(screen === "daily" ? props.campaignLevel || level : level);
   useEffect(() => {   // the next world's plate, fetched at a world's last level so the travel never shows a bare board
@@ -653,6 +664,12 @@ function Board(props) {
         ))}
       </div>
 
+      {props.guide && (
+        <div className="mv-guideline" role="status">
+          <span>{TUTORIAL[guideStep]}</span>
+          <button className="mv-guideskip" onClick={props.onSkipGuide} aria-label="Skip the guide">Skip</button>
+        </div>
+      )}
       {/* equation builder + live total */}
       <div className={"mv-builder" + (completeWrong ? " wrong" : "") + (banking ? " bank" : "")}>
         {banking && !props.palStill && <Frames key="bank" className="mv-bankfx" files={ART.fx.bank} ms={60} />}
@@ -674,7 +691,7 @@ function Board(props) {
       {/* operators */}
       <div className="mv-ops">
         {OPS.map((op) => (
-          <button key={op} className="mv-op" onClick={() => onOp(op)} aria-label={OP_NAMES[op] || op}>{op === "-" ? "−" : op}</button>
+          <button key={op} className={"mv-op" + (guideStep === 1 && op === "+" ? " guide-target" : "")} onClick={() => onOp(op)} aria-label={OP_NAMES[op] || op}>{op === "-" ? "−" : op}</button>
         ))}
       </div>
 
@@ -682,7 +699,7 @@ function Board(props) {
       <div className="mv-circle-region" ref={regionRef}>
         <div className="mv-circle" style={{ width: cd, height: cd, "--cd": cd + "px" }}>
           {puzzle.pool.map((v, i) => (
-            <button key={i} className={"mv-tile" + (usedIdx.has(i) ? " used" : "")}
+            <button key={i} className={"mv-tile" + (usedIdx.has(i) ? " used" : "") + ((guideStep === 0 && v === 2 && !usedIdx.has(i)) || (guideStep === 2 && v === 8 && !usedIdx.has(i)) ? " guide-target" : "")}
               style={{ left: positions[i].x + "%", top: positions[i].y + "%" }}
               onClick={() => onNum(v, i)} aria-label={"number " + v}>
               <span>{v}</span>
@@ -699,7 +716,7 @@ function Board(props) {
         {cleared ? (
           <button className="mv-ctrl next" onClick={onNext} aria-label="Finish and see results">Next <ChevronRight size={16} /></button>
         ) : (
-          <button className="mv-ctrl hint" onClick={onHint} aria-label={"Buy a hint for " + ECONOMY.HINT_COST + " coins"}><Lightbulb size={16} /> Hint <em>{ECONOMY.HINT_COST}</em></button>
+          <button className="mv-ctrl hint" onClick={onHint} disabled={!!props.guide} aria-label={props.guide ? "Hints wait until the guide is done" : "Buy a hint for " + ECONOMY.HINT_COST + " coins"}><Lightbulb size={16} /> Hint <em>{ECONOMY.HINT_COST}</em></button>
         )}
       </div>
 
@@ -1065,7 +1082,7 @@ function Cond({ ok, label }) {
   );
 }
 
-function HowToOverlay({ onClose }) {
+function HowToOverlay({ onClose, onReplayGuide }) {
   const steps = [
     { n: "1", t: "Build an equation", d: "Tap a number, then an operator, then a number… × and ÷ apply before + and −." },
     { n: "2", t: "Hit the target", d: "The moment your equation equals it, it banks itself. No submit button." },
@@ -1086,6 +1103,7 @@ function HowToOverlay({ onClose }) {
         </div>
         <div className="mv-howkeys">Keyboard: <b>1 to 5</b> tiles · <b>+ − × ÷</b> ops · <b>⌫</b> undo · <b>Esc</b> clear · <b>S</b> shuffle · <b>Enter</b> next</div>
         <button className="mv-btn primary" style={{ width: "100%" }} onClick={onClose}>Let's play</button>
+        {onReplayGuide && <button className="mv-btn ghost" style={{ width: "100%", marginTop: 8 }} onClick={onReplayGuide}>Replay the guided first solve</button>}
       </div>
     </div>
   );
@@ -1285,6 +1303,12 @@ function StyleTag() {
     .mv-lvl .mv-lvlstars { font-size: 11.5px; }
     @keyframes mv-lvlpulse { 0%,100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.07); } }
     .mv-nomotion .mv-lvl.current { animation: none; }
+    /* Part 4: the guided first solve */
+    .mv-guideline { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 6px 4px 12px; border-radius: 14px; background: color-mix(in srgb, var(--surf) 88%, transparent); font-weight: 800; font-size: 14.5px; color: var(--text); margin: 2px 0; }
+    .mv-guideskip { min-height: 48px; min-width: 76px; padding: 0 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--surf); color: var(--text); font: inherit; font-weight: 800; font-size: 14px; cursor: pointer; }
+    .guide-target { box-shadow: 0 0 0 4px var(--acc), 0 0 22px color-mix(in srgb, var(--acc) 70%, transparent) !important; animation: mv-guidepulse 1.2s ease-in-out infinite; }
+    @keyframes mv-guidepulse { 0%, 100% { box-shadow: 0 0 0 3px var(--acc), 0 0 14px color-mix(in srgb, var(--acc) 60%, transparent); } 50% { box-shadow: 0 0 0 6px var(--acc), 0 0 26px color-mix(in srgb, var(--acc) 80%, transparent); } }
+    .mv-nomotion .guide-target { animation: none; }
     /* Part 3: the wordmark, the painted win, the bank frames, the daily card, the skin cards */
     .mv-wordmark { display: block; width: 110px; height: 44px; object-fit: contain; }
     .mv-win { position: relative; overflow: hidden; }
