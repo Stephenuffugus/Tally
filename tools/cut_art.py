@@ -27,7 +27,7 @@ def visible(im):
     return im.getchannel("A").point(lambda v: 255 if v > ALPHA else 0).getbbox()
 
 
-def save(im, path, q=85):
+def save(im, path, q=85):   # q 80 for the opaque plates and panels
     os.makedirs(os.path.dirname(path), exist_ok=True)
     im.save(path, "WEBP", quality=q, method=6)
     return os.path.getsize(path)
@@ -69,6 +69,26 @@ for name, side in (("bead_shade", 128), ("bead_plain", 128), ("target_orb", 160)
     b = (0, 0, im.width, im.height) if name == "target_glow" else visible(im)
     sizes[f"beads/{name}.webp"] = save(im.crop(b).resize((side, side), Image.LANCZOS), os.path.join(OUT, "beads", name + ".webp"))
     art["beads"][name] = {"side": side, "cropSrc": list(b)}
+
+# Part 2: the worlds behind the board and the painted map (new files only, under t1/worlds and t1/map). Her file names
+# map to the code's world ids; each plate is 540 x 960 (one loads at a time), each badge and map stop 64.
+WORLDS = {"meadow": "meadow", "bay": "bubble_bay", "candy": "candy_peaks", "city": "starlight_city",
+          "valley": "dino_valley", "space": "space_station", "endless": "endless"}
+anchors = json.load(open(os.path.join(SRC, "extras", "config", "map_anchors.json")))
+art["worlds"], art["map"] = {}, {"stops": {}}
+for wid, her in WORLDS.items():
+    plate = Image.open(os.path.join(SRC, "worlds", "world_%s.jpg" % her)).convert("RGB").resize((540, 960), Image.LANCZOS)
+    sizes[f"worlds/{wid}.webp"] = save(plate, os.path.join(OUT, "worlds", wid + ".webp"), q=80)
+    badge = Image.open(os.path.join(SRC, "worlds", "badge_%s.png" % her)).convert("RGBA").resize((64, 64), Image.LANCZOS)
+    sizes[f"worlds/badge_{wid}.webp"] = save(badge, os.path.join(OUT, "worlds", "badge_" + wid + ".webp"))
+    panel = Image.open(os.path.join(SRC, "map", "map_%s.jpg" % her)).convert("RGB").resize((540, 960), Image.LANCZOS)
+    sizes[f"map/{wid}.webp"] = save(panel, os.path.join(OUT, "map", wid + ".webp"), q=80)
+    stops = anchors[her]["stops"] if her in anchors else anchors[wid]["stops"]
+    art["map"]["stops"][wid] = [[round(s["u"], 4), round(s["v"], 4)] for s in sorted(stops, key=lambda s: s["index"])]
+    art["worlds"][wid] = {"plate": f"worlds/{wid}.webp", "badge": f"worlds/badge_{wid}.webp", "map": f"map/{wid}.webp"}
+for n in ("map_stop", "map_stop_done"):
+    st = Image.open(os.path.join(SRC, "map", n + ".png")).convert("RGBA").resize((64, 64), Image.LANCZOS)
+    sizes[f"map/{n}.webp"] = save(st, os.path.join(OUT, "map", n + ".webp"))
 
 with open(os.path.join(OUT, "art.json"), "w") as fh:
     json.dump(art, fh, indent=1)

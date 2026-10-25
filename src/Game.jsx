@@ -135,6 +135,7 @@ export default function App() {
   const rootStyle = useMemo(() => {
     const s = {};
     Object.entries(theme).forEach(([k, val]) => { s["--" + k] = val; });
+    s["--scrim"] = "color-mix(in srgb, var(--bg) " + (isLightBg(theme.bg) ? 55 : 72) + "%, transparent)";
     return s;
   }, [theme]);
   useEffect(() => { try { document.body.style.background = theme.bg; } catch (e) { /* sandboxed */ } }, [theme]);
@@ -462,6 +463,7 @@ export default function App() {
             puzzle={activePuzzle}
             screen={screen}
             level={campaignLevel}
+            campaignLevel={campaignLevel}
             pal={pal}
             palSay={palSay}
             palEvent={palEvent}
@@ -591,15 +593,19 @@ function Board(props) {
   const foundSolutions = foundSigs.map((sig) => puzzle.solutions.find((s) => s.sig === sig)).filter(Boolean);
   const showEq = builder.length > 0;
 
+  const W = worldOfLevel(screen === "daily" ? props.campaignLevel || level : level);
+  useEffect(() => {   // the next world's plate, fetched at a world's last level so the travel never shows a bare board
+    if (level % WORLD_SIZE === 0) { try { new window.Image().src = worldArt(worldOfLevel(level + 1).world.id, "plate"); } catch (e) { /* offline */ } }
+  }, [level]);
   return (
-    <div className="mv-board">
+    <div className="mv-board" data-world={W.world.id} style={{ "--plate": "url(" + worldArt(W.world.id, "plate") + ")" }}>
       {/* mode + progress */}
       <div className="mv-mode-row">
         {screen === "daily" ? (
           <span className="mv-eyebrow">Daily Challenge</span>
         ) : (
-          <button className="mv-eyebrow mv-eyebrow-btn" onClick={onOpenMap} aria-label="Open the world map">
-            <MapIcon size={12} /> Level {level}
+          <button className="mv-eyebrow mv-eyebrow-btn" onClick={onOpenMap} aria-label={"Open the world map, " + W.world.name + ", level " + level}>
+            <img className="mv-worldbadge" src={worldArt(W.world.id, "badge")} alt="" draggable="false" /> {W.world.name} · {level}
           </button>
         )}
         <span className="mv-progress">
@@ -693,6 +699,10 @@ const OP_NAMES = { "+": "plus", "-": "minus", "×": "times", "÷": "divide" };
 // her relative sizes. Only the equipped pal's frames are fetched and decoded, before the first swap.
 const PAL_REF_H = Math.max(...Object.values(ART.pals).map((a) => a.h));
 function palSrc(id, name) { return "./art/" + ART.version + "/pals/" + id + "/" + name + ".webp"; }
+function worldArt(id, kind) {   // Part 2: the plates, badges and map panels (art/t1/worlds and art/t1/map)
+  const w = ART.worlds && (ART.worlds[id] || ART.worlds.endless);
+  return w ? "./art/" + ART.version + "/" + w[kind] : "";
+}
 function prefersReducedMotion() {
   try { return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); } catch (e) { return false; }
 }
@@ -888,6 +898,8 @@ function Journey({ meta, campaignLevel, onPlay }) {
   const frontier = meta.level;                       // highest unlocked level
   const lastWorld = worldOfLevel(frontier).index;    // show worlds up to & incl. the frontier's world
   const worlds = Array.from({ length: lastWorld + 1 }, (_, i) => worldOfLevel(i * WORLD_SIZE + 1));
+  // the current level in view when the map opens (a long journey scrolls)
+  useEffect(() => { try { const c = document.querySelector(".mv-lvl.current"); if (c && c.scrollIntoView) c.scrollIntoView({ block: "center" }); } catch (e) { /* jsdom */ } }, []);
   return (
     <div className="mv-page">
       <h2 className="mv-page-title">Journey</h2>
@@ -896,33 +908,34 @@ function Journey({ meta, campaignLevel, onPlay }) {
         const levels = [];
         for (let l = w.from; l <= w.to; l++) levels.push(l);
         const collected = levels.reduce((a, l) => a + (meta.stars[pidOf(l)] || 0), 0);
+        const stops = (ART.map && ART.map.stops[w.world.id]) || [];
         return (
-          <div key={w.world.id} className="mv-worldcard">
-            <div className="mv-worldhead">
-              <span className="mv-worldface">{w.world.face}</span>
+          <section key={w.world.id + w.from} className="mv-mappanel" data-world={w.world.id} aria-label={w.world.name}
+            style={{ "--map": "url(" + worldArt(w.world.id, "map") + ")" }}>
+            <div className="mv-maphead">
+              <img className="mv-worldbadge big" src={worldArt(w.world.id, "badge")} alt="" draggable="false" />
               <div className="mv-worldmeta">
                 <div className="mv-worldname">{w.world.name}</div>
-                <div className="mv-skinvibe">{w.world.blurb}</div>
+                <div className="mv-skinvibe">{w.isEndless ? "Levels " + w.from + " to " + w.to : w.world.blurb}</div>
               </div>
               <span className="mv-worldstars"><Star size={13} fill="currentColor" /> {collected}/{levels.length * 3}</span>
             </div>
-            <div className="mv-levelgrid">
-              {levels.map((l) => {
-                const unlocked = l <= frontier;
-                const stars = meta.stars[pidOf(l)] || 0;
-                const current = l === campaignLevel;
-                return (
-                  <button key={l} disabled={!unlocked}
-                    className={"mv-lvlnode" + (unlocked ? "" : " locked") + (current ? " current" : "") + (stars > 0 ? " done" : "")}
-                    onClick={() => onPlay(l)} aria-label={`Level ${l}${unlocked ? "" : " (locked)"}`}>
-                    {unlocked ? <><span className="mv-lvlnum">{l}</span>
-                      <span className="mv-lvlstars">{[0, 1, 2].map((i) => <span key={i} className={"mv-lvlstar" + (i < stars ? " lit" : "")}>★</span>)}</span></>
-                      : <Lock size={16} />}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+            {levels.map((l, k) => {
+              const unlocked = l <= frontier;
+              const stars = meta.stars[pidOf(l)] || 0;
+              const current = l === campaignLevel;
+              const at = stops[k] || [0.5, 0.9 - k * 0.1];
+              return (
+                <button key={l} disabled={!unlocked} style={{ left: at[0] * 100 + "%", top: at[1] * 100 + "%" }}
+                  className={"mv-lvl" + (unlocked ? "" : " locked") + (current ? " current" : "") + (stars > 0 ? " done" : "")}
+                  onClick={() => onPlay(l)} aria-label={`Level ${l}${unlocked ? "" : " (locked)"}`}>
+                  {unlocked ? <><span className="mv-lvlnum">{l}</span>
+                    <span className="mv-lvlstars">{[0, 1, 2].map((i) => <span key={i} className={"mv-lvlstar" + (i < stars ? " lit" : "")}>★</span>)}</span></>
+                    : <Lock size={16} />}
+                </button>
+              );
+            })}
+          </section>
         );
       })}
     </div>
@@ -1207,7 +1220,24 @@ function StyleTag() {
     .mv-main { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
     /* board — a column that fills all space between the top bar and the nav */
-    .mv-board { position: relative; flex: 1; min-height: 0; padding: 2px 16px 8px; display: flex; flex-direction: column; align-items: center; }
+    .mv-board { position: relative; flex: 1; min-height: 0; padding: 2px 16px 8px; display: flex; flex-direction: column; align-items: center;
+      background: linear-gradient(var(--scrim), var(--scrim)), var(--plate, none) center / cover no-repeat; }
+    .mv-worldbadge { width: 22px; height: 22px; margin: -4px 0; object-fit: contain; flex-shrink: 0; }
+    .mv-worldbadge.big { width: 44px; height: 44px; margin: 0; }
+    .mv-mappanel { position: relative; width: 100%; aspect-ratio: 9 / 16; margin-bottom: 14px; border-radius: 18px; overflow: hidden;
+      background: var(--map, none) center / 100% 100% no-repeat, var(--surf2); }
+    .mv-maphead { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 14px;
+      background: color-mix(in srgb, var(--surf) 88%, transparent); z-index: 2; }
+    .mv-lvl { position: absolute; width: 56px; height: 56px; transform: translate(-50%, -50%); border-radius: 50%; z-index: 1; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0; font: inherit; font-weight: 800; font-size: 17px;
+      color: var(--text); background: color-mix(in srgb, var(--surf) 92%, transparent); border: 2px solid color-mix(in srgb, var(--line) 80%, transparent);
+      box-shadow: 0 4px 10px rgba(0,0,0,.28); }
+    .mv-lvl.done { background: color-mix(in srgb, var(--good) 20%, var(--surf)); border-color: var(--good); }
+    .mv-lvl.current { border-color: var(--acc); box-shadow: 0 0 0 4px color-mix(in srgb, var(--acc) 40%, transparent), 0 4px 10px rgba(0,0,0,.28); animation: mv-lvlpulse 1.8s ease-in-out infinite; }
+    .mv-lvl.locked { color: var(--muted); cursor: default; background: color-mix(in srgb, var(--surf) 80%, transparent); }
+    .mv-lvl .mv-lvlstars { font-size: 11.5px; }
+    @keyframes mv-lvlpulse { 0%,100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.07); } }
+    .mv-nomotion .mv-lvl.current { animation: none; }
     .mv-mode-row { width: 100%; display: flex; justify-content: space-between; align-items: center; margin: 2px 0; min-height: 20px; }
     .mv-eyebrow { font-size: 11.5px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--acc); }
     .mv-progress { display: inline-flex; align-items: center; gap: 6px; }
@@ -1535,7 +1565,7 @@ function StyleTag() {
     .mv-nomotion .mv-star.lit, .mv-nomotion .mv-mote, .mv-nomotion .mv-findchip,
     .mv-nomotion .mv-pal-face, .mv-nomotion .mv-preview-pal, .mv-nomotion .mv-palface { animation: none !important; }
     @media (prefers-reduced-motion: reduce) {
-      .mv-beacon, .mv-beacon::before, .mv-mote, .mv-pal-face, .mv-preview-pal, .mv-palface { animation: none !important; }
+      .mv-beacon, .mv-beacon::before, .mv-mote, .mv-pal-face, .mv-preview-pal, .mv-palface, .mv-lvl.current { animation: none !important; }
     }
     button:focus-visible, .mv-tile:focus-visible { outline: 3px solid var(--acc); outline-offset: 2px; }
     `}</style>
