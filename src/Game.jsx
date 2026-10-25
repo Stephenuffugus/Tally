@@ -920,6 +920,7 @@ function Journey({ meta, campaignLevel, onPlay }) {
               </div>
               <span className="mv-worldstars"><Star size={13} fill="currentColor" /> {collected}/{levels.length * 3}</span>
             </div>
+            <div className="mv-mapart">
             {levels.map((l, k) => {
               const unlocked = l <= frontier;
               const stars = meta.stars[pidOf(l)] || 0;
@@ -935,6 +936,7 @@ function Journey({ meta, campaignLevel, onPlay }) {
                 </button>
               );
             })}
+            </div>
           </section>
         );
       })}
@@ -1224,10 +1226,10 @@ function StyleTag() {
       background: linear-gradient(var(--scrim), var(--scrim)), var(--plate, none) center / cover no-repeat; }
     .mv-worldbadge { width: 22px; height: 22px; margin: -4px 0; object-fit: contain; flex-shrink: 0; }
     .mv-worldbadge.big { width: 44px; height: 44px; margin: 0; }
-    .mv-mappanel { position: relative; width: 100%; aspect-ratio: 9 / 16; margin-bottom: 14px; border-radius: 18px; overflow: hidden;
-      background: var(--map, none) center / 100% 100% no-repeat, var(--surf2); }
-    .mv-maphead { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 14px;
-      background: color-mix(in srgb, var(--surf) 88%, transparent); z-index: 2; }
+    .mv-mappanel { position: relative; width: 100%; margin-bottom: 14px; border-radius: 18px; overflow: hidden; background: var(--surf2); }
+    /* the head is a strip above her painting, never over a stop (at 360 wide the top stop sits 80 px into the art) */
+    .mv-maphead { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: color-mix(in srgb, var(--surf) 88%, transparent); }
+    .mv-mapart { position: relative; width: 100%; aspect-ratio: 9 / 16; background: var(--map, none) center / 100% 100% no-repeat; }
     .mv-lvl { position: absolute; width: 56px; height: 56px; transform: translate(-50%, -50%); border-radius: 50%; z-index: 1; cursor: pointer;
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; padding: 0; font: inherit; font-weight: 800; font-size: 17px;
       color: var(--text); background: color-mix(in srgb, var(--surf) 92%, transparent); border: 2px solid color-mix(in srgb, var(--line) 80%, transparent);
@@ -1272,7 +1274,7 @@ function StyleTag() {
       margin: 4px 0; min-height: 30px; overflow-x: auto; overflow-y: hidden; padding-bottom: 1px;
       scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); }
     .mv-finds::-webkit-scrollbar { display: none; }
-    .mv-finds-empty { color: var(--muted); font-size: 12.5px; font-weight: 600; white-space: nowrap; opacity: .85; }
+    .mv-finds-empty { color: var(--text); font-size: 12.5px; font-weight: 700; white-space: nowrap; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--surf) 86%, transparent); }
     .mv-findchip { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 800; white-space: nowrap;
       padding: 5px 10px; border-radius: 999px; flex-shrink: 0; color: var(--text);
       background: color-mix(in srgb, var(--good) 16%, var(--surf)); border: 1px solid color-mix(in srgb, var(--good) 42%, transparent);
@@ -1502,7 +1504,9 @@ function StyleTag() {
 
     /* eyebrow-as-button (opens the map) */
     /* a 48 px tall touch box around a 16 px line: the negative margin keeps the row's height (the play screen never scrolls) */
-    .mv-eyebrow-btn { background: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0 10px 0 0; min-height: 48px; margin: -4px 0 -28px; position: relative; z-index: 1; }
+    .mv-eyebrow-btn { background: none; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; padding: 0 10px; min-height: 48px; margin: -4px 0 -28px; position: relative; z-index: 1; color: var(--text); }
+    /* Part 2: the row stands on a frosted pill (the map head's device) so it reads over any painted world; the 48 px button keeps its height */
+    .mv-eyebrow-btn::before { content: ""; position: absolute; inset: 10px 0; border-radius: 999px; z-index: -1; background: color-mix(in srgb, var(--surf) 86%, transparent); }
     .mv-eyebrow-btn svg { opacity: .85; }
     .mv-eyebrow-btn:active { transform: scale(.96); }
 
