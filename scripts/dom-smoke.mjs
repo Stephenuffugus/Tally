@@ -6,7 +6,7 @@ import { createRequire } from "node:module";
 import { writeFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { evalExpr, OPS, sigOf, genPuzzle, levelOpts } from "../src/engine.js";
+import { evalExpr, OPS, sigOf, genPuzzle, levelOpts, todayKey } from "../src/engine.js";
 import * as CFG from "../src/config.js";   // a namespace, so an older copy without TALLY_BUILD still runs (and fails its check)
 const { PALS, ECONOMY, TALLY_BUILD, worldOfLevel } = CFG;
 
@@ -111,6 +111,7 @@ const waitFor = async (sel, ms = 4000) => {
 await waitFor(".mv-beacon-num");
 await sleep(200); // let StrictMode's double-mount effects settle before driving input
 A("board renders", !!q(".mv-board"));
+A("Part 3: the wordmark stands in the header", !!q(".mv-wordmark") && /ui\/logo\.webp/.test(q(".mv-wordmark").getAttribute("src")));
 A("four operators + − × ÷", qa(".mv-op").map((b) => b.textContent).join("") === "+−×÷");
 A("no submit button (auto-commit UX)", qa(".mv-submit").length === 0);
 A("help button present", !!q('[aria-label="How to play"]'));
@@ -164,6 +165,9 @@ const nextBtn = q(".mv-ctrl.next");
 A("Next appears after clearing required", !!nextBtn);
 if (nextBtn) { click(nextBtn); await sleep(120); }
 A("win summary opens", !!q(".mv-win-title"));
+A("Part 3: the win shows Astra's banner, three painted stars and the pal's win loop", !!q(".mv-win-banner") && qa(".mv-starimg").length === 3 && !!q(".mv-winpal img") && /win_0\d\.webp$/.test(q(".mv-winpal img").getAttribute("src")), (q(".mv-winpal img") || {}).getAttribute && q(".mv-winpal img").getAttribute("src"));
+A("Part 3: one confetti pass on a campaign clear (motion on)", !!q(".mv-confetti") && /fx\/confetti_0\d\.webp$/.test(q(".mv-confetti").getAttribute("src")), (q(".mv-confetti") || {}).getAttribute && q(".mv-confetti").getAttribute("src"));
+A("Part 3: a lit star pops once", qa(".mv-starpop").length >= 1 && /star_pop_0\d/.test(qa(".mv-starpop")[0].getAttribute("src")));
 const P1 = genPuzzle(1001, levelOpts(1));
 A("star 2 label follows the puzzle (level 1)", condTexts()[1] === star2Label(P1.hasClean), JSON.stringify(condTexts()[1]) + " hasClean=" + P1.hasClean);
 A("star 3 label follows the puzzle (level 1)", condTexts()[2] === star3Label(P1), JSON.stringify(condTexts()[2]));
@@ -265,6 +269,70 @@ click(navBtn("Map")); await sleep(150);
 { const w57 = worldOfLevel(57), panel = qa(".mv-mappanel").find((s) => s.getAttribute("data-world") === "endless" && s.textContent.indexOf("Levels " + w57.from + " to " + w57.to) >= 0);
   A("the Endless panel names its real levels (" + w57.from + " to " + w57.to + ")", !!panel && [...panel.querySelectorAll(".mv-lvl")].map((x) => x.querySelector(".mv-lvlnum") && x.querySelector(".mv-lvlnum").textContent).filter(Boolean).indexOf(String(w57.from)) >= 0, qa(".mv-mappanel").length + " panels"); }
 rootC.unmount();
+
+// Part 3: the splash plate leaves after mount; the daily card and the midnight regenerate; no confetti on a daily replay nor under reduced motion
+{
+  const DAILY_OPTS = { poolSize: 5, lo: 1, hi: 22, tMin: 12, tMax: 99, reqCap: 3 };
+  const navBtn3 = (label) => qa(".mv-navbtn").find((b) => b.textContent.includes(label));
+  const glyph = (g) => ({ "-": "−", "*": "×", "/": "÷", "x": "×" })[g] || g;
+  async function playTokens(sols) {   // plays the puzzle's own solutions until Next appears
+    const opNode = (g) => qa(".mv-op").find((b) => b.textContent === glyph(g));
+    const tileNode = (v) => qa(".mv-tile").find((t) => parseInt(t.textContent, 10) === v);
+    for (const sol of sols.slice(0, 12)) {
+      for (const x of sol) { const n = (typeof x === "number") ? tileNode(x) : opNode(x); if (n) click(n); await sleep(20); }
+      await sleep(400); if (q(".mv-ctrl.next")) break;
+      const cl = qa(".mv-ctrl").find((b) => /Clear/.test(b.textContent)); if (cl && !cl.disabled) { click(cl); await sleep(30); }
+    }
+    if (q(".mv-ctrl.next")) { click(q(".mv-ctrl.next")); await sleep(150); }
+  }
+  const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+  // a. the splash plate (index.html) is faded and removed once the game is up
+  if (typeof rootC !== "undefined" && rootC) rootC.unmount();
+  document.body.insertAdjacentHTML("beforeend", '<div id="mv-splashplate"></div>');
+  el = document.createElement("div"); document.body.appendChild(el);
+  seed = { seenIntro: true };
+  let rootD = mount(el);
+  await waitFor(".mv-beacon-num"); await sleep(500);
+  A("Part 3: the splash plate is removed after mount", !document.getElementById("mv-splashplate"));
+  // b. the daily card, then a new day while the tab is open makes a new daily
+  click(navBtn3("Daily")); await sleep(150);
+  const card = q(".mv-dailycard");
+  A("Part 3: the daily card says the date, the state and the days played", !!card && /Daily for /.test(card.textContent) && /Not played yet/.test(card.textContent) && /days played/.test(card.textContent), card && card.textContent);
+  const t1 = parseInt(q(".mv-beacon-num").textContent, 10);
+  const RealDate = globalThis.Date;
+  class FakeDate extends RealDate { constructor(...a) { if (a.length) super(...a); else super(RealDate.now() + 86400000); } static now() { return RealDate.now() + 86400000; } }
+  globalThis.Date = FakeDate; dom.window.Date = FakeDate;
+  const tomorrow = new FakeDate(); const key2 = tomorrow.getFullYear() * 10000 + (tomorrow.getMonth() + 1) * 100 + tomorrow.getDate();
+  dom.window.dispatchEvent(new dom.window.Event("focus")); await sleep(200);
+  const t2 = parseInt(q(".mv-beacon-num").textContent, 10);
+  const want2 = genPuzzle(key2, DAILY_OPTS).target;
+  A("Part 3: the daily regenerates when the day changes while the tab is open (fake clock, +1 day, focus)", t2 === want2 && (t1 !== t2 || genPuzzle(key2 - 1, DAILY_OPTS).target === want2), `before ${t1} after ${t2} want ${want2}`);
+  globalThis.Date = RealDate; dom.window.Date = RealDate;
+  rootD.unmount();
+  // c. a daily already done today: the win says replay and brings no confetti
+  el = document.createElement("div"); document.body.appendChild(el);
+  seed = { seenIntro: true, lastDaily: todayIso(), streak: 3 };
+  rootD = mount(el);
+  await waitFor(".mv-beacon-num"); await sleep(300);
+  click(navBtn3("Daily")); await sleep(150);
+  A("Part 3: the daily card says done today", /Done today/.test((q(".mv-dailycard") || {}).textContent || ""), (q(".mv-dailycard") || {}).textContent);
+  {
+    const P = genPuzzle(todayKey(), DAILY_OPTS);   // the puzzle's own solutions drive the board (the local solver stops at four numbers)
+    await playTokens(P.solutions.map((x) => x.tokens));
+    A("Part 3: a daily replay says so and brings no confetti", !!q(".mv-win-title") && /Replayed/.test((q(".mv-daily-note") || {}).textContent || "") && !q(".mv-confetti"), `win ${!!q(".mv-win-title")} finds ${qa(".mv-findchip").length} sols ${sols.length} note ${(q(".mv-daily-note") || {}).textContent} confetti ${!!q(".mv-confetti")}`);
+  }
+  rootD.unmount();
+  // d. reduced motion: a campaign clear shows the pal's last pose, no star pop, no confetti
+  el = document.createElement("div"); document.body.appendChild(el);
+  seed = { seenIntro: true, motion: false };
+  rootD = mount(el);
+  await waitFor(".mv-beacon-num"); await sleep(300);
+  {
+    const P = genPuzzle(1001, levelOpts(1)); await playTokens(P.solutions.map((x) => x.tokens));
+    A("Part 3: under reduced motion the win has no confetti and no star pop, and the pal holds its last win pose", !!q(".mv-win-title") && !q(".mv-confetti") && qa(".mv-starpop").length === 0 && /win_06\.webp$/.test((q(".mv-winpal img") || { getAttribute: () => "" }).getAttribute("src") || ""), (q(".mv-winpal img") || {}).getAttribute && q(".mv-winpal img").getAttribute("src"));
+  }
+  rootD.unmount();
+}
 
 rmSync(entry, { force: true }); rmSync(outfile, { force: true });
 console.log("\n" + results.join("\n"));
