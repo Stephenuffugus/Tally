@@ -1023,8 +1023,10 @@ function WinOverlay({ data, onNext, onShare, mode, pal, still }) {
       {confetti && <Frames key={"confetti" + data.target} className="mv-confetti" files={ART.fx.confetti} ms={90} />}
       <div className="mv-modal mv-win">
         <div className="mv-win-glow" />
-        <img className="mv-win-banner" src={uiArt("win_banner")} alt="" draggable="false" />
-        <div className="mv-win-title">{mode === "daily" ? "Daily complete" : "Round complete"}</div>
+        <div className="mv-win-head">
+          <img className="mv-win-banner" src={uiArt("win_banner")} alt="" draggable="false" />
+          <div className="mv-win-title">{mode === "daily" ? "Daily complete" : "Round complete"}</div>
+        </div>
         <div className="mv-win-row">
           <div className="mv-stars">
             {[0, 1, 2].map((i) => (
@@ -1286,7 +1288,9 @@ function StyleTag() {
     /* Part 3: the wordmark, the painted win, the bank frames, the daily card, the skin cards */
     .mv-wordmark { display: block; width: 110px; height: 44px; object-fit: contain; }
     .mv-win { position: relative; overflow: hidden; }
-    .mv-win-banner { display: block; width: min(100%, 300px); height: auto; margin: -6px auto 2px; pointer-events: none; }
+    .mv-win-head { position: relative; width: min(100%, 300px); margin: -4px auto 4px; }
+    .mv-win-banner { display: block; width: 100%; height: auto; pointer-events: none; }
+    .mv-win-head .mv-win-title { position: absolute; left: 15%; right: 15%; top: 50%; transform: translateY(-58%); margin: 0; text-align: center; font-size: 19px; line-height: 1.1; color: #2c2416; }
     .mv-win-row { display: flex; align-items: center; justify-content: center; gap: 14px; }
     .mv-starwrap { position: relative; display: inline-block; width: 42px; height: 42px; }
     .mv-starimg { width: 42px; height: 42px; display: block; }
@@ -1299,7 +1303,8 @@ function StyleTag() {
     .mv-nomotion .mv-starwrap.lit .mv-starimg { animation: none; }
     .mv-bankfx { position: absolute; left: 50%; top: 50%; width: 128px; height: 128px; transform: translate(-50%, -50%); pointer-events: none; z-index: 3; }
     .mv-dailycard { width: 100%; max-width: 220px; aspect-ratio: 450 / 300; background: center / 100% 100% no-repeat; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; text-align: center; padding: 8px 12px; box-sizing: border-box; margin: 0 auto 2px; }
-    @media (max-height: 700px) { .mv-dailycard { max-width: 126px; padding: 4px 8px; margin-bottom: 0; } .mv-dailydate { font-size: 9.5px; letter-spacing: 1px; } .mv-dailystate { font-size: 11.5px; } .mv-dailystreak { font-size: 10.5px; } }
+    @media (max-height: 700px) { .mv-dailycard { background-image: none !important; background-color: color-mix(in srgb, var(--surf) 86%, transparent); aspect-ratio: auto; max-width: none; width: auto; border-radius: 999px; padding: 5px 12px; margin: 0 auto 2px; flex-direction: row; flex-wrap: wrap; column-gap: 8px; row-gap: 0; justify-content: center; }
+      .mv-dailydate { font-size: 10.5px; letter-spacing: 1.5px; } .mv-dailystate { font-size: 12px; } .mv-dailystreak { font-size: 11px; } }
     .mv-dailydate { font-size: 11.5px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; color: var(--acc); }
     .mv-dailystate { font-size: 14px; font-weight: 800; color: var(--text); }
     .mv-dailystreak { font-size: 12.5px; font-weight: 700; color: var(--muted); }
