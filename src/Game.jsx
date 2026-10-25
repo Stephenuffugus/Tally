@@ -716,7 +716,7 @@ function Board(props) {
         {cleared ? (
           <button className="mv-ctrl next" onClick={onNext} aria-label="Finish and see results">Next <ChevronRight size={16} /></button>
         ) : (
-          <button className="mv-ctrl hint" onClick={onHint} aria-label={"Buy a hint for " + ECONOMY.HINT_COST + " coins"}><Lightbulb size={16} /> Hint <em>{ECONOMY.HINT_COST}</em></button>
+          <button className="mv-ctrl hint" onClick={onHint} disabled={!!props.guide} aria-label={props.guide ? "Hints wait until the guide is done" : "Buy a hint for " + ECONOMY.HINT_COST + " coins"}><Lightbulb size={16} /> Hint <em>{ECONOMY.HINT_COST}</em></button>
         )}
       </div>
 
